@@ -218,16 +218,11 @@ public sealed class DirectInputManager : IDisposable
         if (_getObjectsMethod == null || _deviceObjectEnumType == null)
             return 0;
 
-        object flag;
-
-        try
-        {
-            flag = Enum.Parse(_deviceObjectEnumType, flagName);
-        }
-        catch
-        {
+        // Skip enum names that aren't supported without throwing exceptions
+        if (!Enum.IsDefined(_deviceObjectEnumType, flagName))
             return 0;
-        }
+
+        object flag = Enum.Parse(_deviceObjectEnumType, flagName);
 
         object? result = _getObjectsMethod.Invoke(device, new[] { flag });
 
