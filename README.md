@@ -1,8 +1,8 @@
 ﻿# Falcon BMS Launcher
 
-![Main tab](.github/images/main-tab.png)
+Falcon BMS Launcher v3 has been designed from the ground up to make it easier to set up and customize your controls, all while retaining your existing assignments as Falcon BMS adds or changes controls.
 
-Falcon BMS Launcher v3 has been redesigned from the ground up to make control setup easier to understand, edit, and customize, all while retaining your existing assignments as Falcon BMS adds or updates controls.
+![Main tab](.github/images/main-tab.png)
 
 This Launcher is compatible with both Windows and Linux.
 
@@ -10,7 +10,7 @@ This Launcher is compatible with both Windows and Linux.
 ## Contents
 
 - [Getting Started](#getting-started)
-  - [Checking for Updates]{#checking-updates} 
+  - [Checking for Updates](#checking-updates)
   - [First Run on a New Install](#fresh-install)
   - [Upgrading From an Older Version](#v2-import)
 - [Assigning Controls](#assigning-controls)
@@ -97,7 +97,7 @@ For DX inputs, you can assign a button to a shifted state or have the assigned c
 - First select "SHIFTED" and/or "RELEASE", then press a device's button
 - "SHIFTED" and/or "RELEASE" will display in the Assigned DX line to let you know when either option is set
 
-- <a id="mapping-axis"></a>
+<a id="mapping-axis"></a>
 ### Mapping an Axis
 All axis rows can easily be found in the Mapping table by selecting "ALL AXES" in the Category panel.
 
