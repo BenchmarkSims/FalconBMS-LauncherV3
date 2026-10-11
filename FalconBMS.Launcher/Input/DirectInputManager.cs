@@ -1,4 +1,5 @@
 ﻿using FalconBMS.Launcher.Models;
+using FalconBMS.Launcher.Services;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -397,6 +398,10 @@ public sealed class KeyboardSession : IDisposable
         _listenerThread.Start();
     }
 
+    // True while the device is known to be unacquired. Used to log the loss
+    // and the recovery once instead of on every watchdog tick.
+    private bool _acquisitionLostLogged;
+
     private void ListenLoop()
     {
         WaitHandle[] waitHandles =
@@ -407,8 +412,13 @@ public sealed class KeyboardSession : IDisposable
 
         while (!_disposed)
         {
+            // 0 = stop, 1 = data event, WaitTimeout = watchdog tick.
+            // On a timeout we still drain: this is how a lost acquisition
+            // is detected when the device has gone silent
             int signaled =
-                WaitHandle.WaitAny(waitHandles);
+                WaitHandle.WaitAny(
+                    waitHandles,
+                    DirectInputRecovery.WatchdogIntervalMs);
 
             if (signaled == 0 || _disposed)
                 return;
@@ -416,6 +426,30 @@ public sealed class KeyboardSession : IDisposable
             try
             {
                 DrainBufferedInput();
+
+                if (_acquisitionLostLogged)
+                {
+                    _acquisitionLostLogged = false;
+
+                    DebugDiagnosticsService.Info(
+                        "Keyboard DirectInput acquisition recovered.");
+                }
+            }
+            catch (Exception ex) when (
+                !_disposed &&
+                DirectInputRecovery.IsAcquisitionLost(ex))
+            {
+                if (!_acquisitionLostLogged)
+                {
+                    _acquisitionLostLogged = true;
+
+                    DebugDiagnosticsService.Warn(
+                        "Keyboard DirectInput acquisition lost. " +
+                        $"HRESULT=0x{DirectInputRecovery.GetHResult(ex):X8}. " +
+                        "Reacquiring.");
+                }
+
+                TryReacquire();
             }
             catch (Exception ex)
             {
@@ -424,6 +458,31 @@ public sealed class KeyboardSession : IDisposable
 
                 return;
             }
+        }
+    }
+
+    private void TryReacquire()
+    {
+        try
+        {
+            _device.Acquire();
+
+            // Key transitions during the outage were lost. Forget held keys
+            // and modifiers so nothing stays stuck down.
+            _pressedKeys.Clear();
+            _leftShiftPressed = false;
+            _rightShiftPressed = false;
+            _leftControlPressed = false;
+            _rightControlPressed = false;
+            _leftAltPressed = false;
+            _rightAltPressed = false;
+            _leftWindowsPressed = false;
+            _rightWindowsPressed = false;
+        }
+        catch
+        {
+            // Still unavailable (unplugged, another app has priority).
+            // The next watchdog tick tries again.
         }
     }
 
@@ -646,8 +705,18 @@ public sealed class JoystickSession : IDisposable
             };
     }
 
-    // Initialization completes before buffered events are processed.
-    // The snapshot remains the existing single startup poll.
+    // Signalled once the listener thread has finished startup
+    // (Acquire + initial state seed), whether it succeeded or failed
+    private readonly ManualResetEventSlim _startupComplete = new(false);
+
+    // Startup failure captured on the listener thread and rethrown
+    // to the caller of Start()
+    private Exception? _startupException;
+
+    // Keep Start() synchronous while acquiring on the dedicated listener
+    // thread. Under Wine, acquisition from a temporary Task.Run worker
+    // was followed by DIERR_INPUTLOST after approximately 20 seconds.
+    // Thread-pool worker retirement is the suspected cause.
     internal void Start()
     {
         if (_disposed)
@@ -657,12 +726,17 @@ public sealed class JoystickSession : IDisposable
         if (_started)
             return;
 
-        _device.Acquire();
-
-        SeedInitialState();
-
         _started = true;
         _listenerThread.Start();
+
+        _startupComplete.Wait();
+
+        if (_startupException is not null)
+        {
+            throw new InvalidOperationException(
+                "Joystick DirectInput startup failed.",
+                _startupException);
+        }
     }
 
     private void SeedInitialState()
@@ -719,8 +793,30 @@ public sealed class JoystickSession : IDisposable
         // The startup snapshot intentionally emits no events.
     }
 
+    // True while the device is known to be unacquired. Used to log the loss
+    // and the recovery once instead of on every watchdog tick.
+    private bool _acquisitionLostLogged;
+
     private void ListenLoop()
     {
+        // Startup runs on this long-lived dedicated thread so the device's
+        // I/O is owned by a thread that never gets retired
+        try
+        {
+            _device.Acquire();
+            SeedInitialState();
+        }
+        catch (Exception ex)
+        {
+            _startupException = ex;
+            return;
+        }
+        finally
+        {
+            // Always release Start(), including on failure
+            _startupComplete.Set();
+        }
+
         WaitHandle[] waitHandles =
         {
             _stopRequested,
@@ -729,8 +825,13 @@ public sealed class JoystickSession : IDisposable
 
         while (!_disposed)
         {
+            // 0 = stop, 1 = data event, WaitTimeout = watchdog tick.
+            // On a timeout we still drain: this is how a lost acquisition
+            // is detected when the device has gone silent
             int signaled =
-                WaitHandle.WaitAny(waitHandles);
+                WaitHandle.WaitAny(
+                    waitHandles,
+                    DirectInputRecovery.WatchdogIntervalMs);
 
             if (signaled == 0 || _disposed)
                 return;
@@ -738,6 +839,30 @@ public sealed class JoystickSession : IDisposable
             try
             {
                 DrainBufferedInput();
+
+                if (_acquisitionLostLogged)
+                {
+                    _acquisitionLostLogged = false;
+
+                    DebugDiagnosticsService.Info(
+                        "Joystick DirectInput acquisition recovered.");
+                }
+            }
+            catch (Exception ex) when (
+                !_disposed &&
+                DirectInputRecovery.IsAcquisitionLost(ex))
+            {
+                if (!_acquisitionLostLogged)
+                {
+                    _acquisitionLostLogged = true;
+
+                    DebugDiagnosticsService.Warn(
+                        "Joystick DirectInput acquisition lost. " +
+                        $"HRESULT=0x{DirectInputRecovery.GetHResult(ex):X8}. " +
+                        "Reacquiring.");
+                }
+
+                TryReacquire();
             }
             catch (Exception ex)
             {
@@ -746,6 +871,24 @@ public sealed class JoystickSession : IDisposable
 
                 return;
             }
+        }
+    }
+
+    private void TryReacquire()
+    {
+        try
+        {
+            _device.Acquire();
+
+            // Changes made during the outage produced no buffered events.
+            // Reseed the cached axis/button state silently so Controls
+            // reads current values again. SeedInitialState emits no events.
+            SeedInitialState();
+        }
+        catch
+        {
+            // Still unavailable (unplugged, another app has priority).
+            // The next watchdog tick tries again.
         }
     }
 
