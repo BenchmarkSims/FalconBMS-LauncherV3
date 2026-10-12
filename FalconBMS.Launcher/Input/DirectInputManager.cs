@@ -398,9 +398,10 @@ public sealed class KeyboardSession : IDisposable
         _listenerThread.Start();
     }
 
-    // True while the device is known to be unacquired. Used to log the loss
-    // and the recovery once instead of on every watchdog tick.
+    // Track acquisition loss so warnings and recovery are logged only once
+    // per detected loss
     private bool _acquisitionLostLogged;
+
 
     private void ListenLoop()
     {
@@ -410,18 +411,15 @@ public sealed class KeyboardSession : IDisposable
             _dataAvailable
         };
 
+
         while (!_disposed)
         {
-            // 0 = stop, 1 = data event, WaitTimeout = watchdog tick.
-            // On a timeout we still drain: this is how a lost acquisition
-            // is detected when the device has gone silent
-            int signaled =
-                WaitHandle.WaitAny(
-                    waitHandles,
-                    DirectInputRecovery.WatchdogIntervalMs);
+            // Wait for a DirectInput event or shutdown
+            int signaled = WaitHandle.WaitAny(waitHandles);
 
             if (signaled == 0 || _disposed)
                 return;
+
 
             try
             {
@@ -479,11 +477,13 @@ public sealed class KeyboardSession : IDisposable
             _leftWindowsPressed = false;
             _rightWindowsPressed = false;
         }
+
         catch
         {
-            // Still unavailable (unplugged, another app has priority).
-            // The next watchdog tick tries again.
+            // Device is still unavailable (unplugged or another app has priority).
+            // A future DirectInput event may provide another recovery opportunity.
         }
+
     }
 
     private void DrainBufferedInput()
@@ -823,18 +823,15 @@ public sealed class JoystickSession : IDisposable
             _dataAvailable
         };
 
+
         while (!_disposed)
         {
-            // 0 = stop, 1 = data event, WaitTimeout = watchdog tick.
-            // On a timeout we still drain: this is how a lost acquisition
-            // is detected when the device has gone silent
-            int signaled =
-                WaitHandle.WaitAny(
-                    waitHandles,
-                    DirectInputRecovery.WatchdogIntervalMs);
+            // Wait for a DirectInput event or shutdown
+            int signaled = WaitHandle.WaitAny(waitHandles);
 
             if (signaled == 0 || _disposed)
                 return;
+
 
             try
             {
@@ -885,11 +882,13 @@ public sealed class JoystickSession : IDisposable
             // reads current values again. SeedInitialState emits no events.
             SeedInitialState();
         }
+
         catch
         {
-            // Still unavailable (unplugged, another app has priority).
-            // The next watchdog tick tries again.
+            // Device is still unavailable (unplugged or another app has priority).
+            // A future DirectInput event may provide another recovery opportunity.
         }
+
     }
 
     private void DrainBufferedInput()
