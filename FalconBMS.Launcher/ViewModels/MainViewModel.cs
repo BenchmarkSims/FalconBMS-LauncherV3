@@ -1054,6 +1054,13 @@ public sealed class MainViewModel : ViewModelBase
         }
     }
 
+    public void SaveOutputsOnDeactivationWhenBmsRunning()
+    {
+        if (!_proc.IsBmsRunning()) return;
+
+        this.SaveOutputsForClose();
+    }
+
     private void LaunchSelected()
     {
         if (SelectedInstall is null) return;
