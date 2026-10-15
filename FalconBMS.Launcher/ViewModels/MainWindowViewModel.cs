@@ -83,4 +83,9 @@ public sealed class MainWindowViewModel : ViewModelBase
     {
         Main.SaveOutputsForClose();
     }
+
+    public void SaveOutputsOnDeactivationWhenBmsRunning()
+    {
+        Main.SaveOutputsOnDeactivationWhenBmsRunning();
+    }
 }

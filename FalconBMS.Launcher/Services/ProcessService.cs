@@ -12,6 +12,18 @@ namespace FalconBMS.Launcher.Services;
 /// </summary>
 public sealed class ProcessService
 {
+    public bool IsBmsRunning( )
+    {
+        // Note: purposely not checking for specific path here, as I often run dev branch builds not 
+        // listed in the registry key.
+        foreach (var process in Process.GetProcessesByName("Falcon BMS"))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
     public bool IsBmsUpdaterRunning(
         IReadOnlyList<BmsInstall> installs)
     {

@@ -368,6 +368,21 @@ public partial class MainWindow : Window
         viewModel.SaveOutputsForClose();
     }
 
+    protected override void OnActivated( EventArgs e )
+    {
+        base.OnActivated(e);
+    }
+
+    protected override void OnDeactivated( EventArgs e )
+    {
+        base.OnDeactivated(e);
+
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        viewModel.SaveOutputsOnDeactivationWhenBmsRunning();
+    }
+
     private void MainWindow_Closed(
         object? sender,
         EventArgs e)
