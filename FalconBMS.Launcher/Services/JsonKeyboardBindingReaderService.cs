@@ -1,9 +1,11 @@
 ﻿using FalconBMS.Launcher.Models;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.Serialization;
+using System.Text.Json;
 
 namespace FalconBMS.Launcher.Services;
 
@@ -477,9 +479,15 @@ public sealed class JsonKeyboardBindingReaderService
             CallbackName = KeyComboCallbackName,
             SoundId = jsonRow.SoundId ?? templateRow?.SoundId ?? -1,
             Unused = jsonRow.Unused ?? templateRow?.Unused ?? 0,
-            KeyScancode = jsonRow.KeyScancode ?? templateRow?.KeyScancode ?? "0xFFFFFFFF",
+            KeyScancode = ReadScancode(
+                jsonRow.KeyScancode,
+                templateRow?.KeyScancode ?? "0xFFFFFFFF",
+                "0xFFFFFFFF"),
             KeyModifierFlags = jsonRow.KeyModifierFlags ?? templateRow?.KeyModifierFlags ?? 0,
-            ChordScancode = jsonRow.ChordScancode ?? templateRow?.ChordScancode ?? "0",
+            ChordScancode = ReadScancode(
+                jsonRow.ChordScancode,
+                templateRow?.ChordScancode ?? "0",
+                "0xFFFFFFFF"),
             ChordModifierFlags = jsonRow.ChordModifierFlags ?? templateRow?.ChordModifierFlags ?? 0,
             Visibility = jsonRow.Visibility ?? templateRow?.Visibility ?? 1,
             Description = jsonRow.Description ?? templateRow?.Description ?? "",
@@ -501,15 +509,17 @@ public sealed class JsonKeyboardBindingReaderService
             CallbackName = templateRow.CallbackName,
             SoundId = templateRow.SoundId,
             Unused = templateRow.Unused,
-            KeyScancode =
-                jsonRow.KeyScancode ??
+            KeyScancode = ReadScancode(
+                jsonRow.KeyScancode,
                 templateRow.KeyScancode,
+                "0xFFFFFFFF"),
             KeyModifierFlags =
                 jsonRow.KeyModifierFlags ??
                 templateRow.KeyModifierFlags,
-            ChordScancode =
-                jsonRow.ChordScancode ??
+            ChordScancode = ReadScancode(
+                jsonRow.ChordScancode,
                 templateRow.ChordScancode,
+                "0xFFFFFFFF"),
             ChordModifierFlags =
                 jsonRow.ChordModifierFlags ??
                 templateRow.ChordModifierFlags,
@@ -556,6 +566,55 @@ public sealed class JsonKeyboardBindingReaderService
         return JsonFileHelper.FromJsonFile<JsonKeyboardBindingDocument>(path);
     }
 
+    // Supports legacy hexadecimal strings and the new numeric JSON format.
+    // Null represents an unassigned scancode, while a blank property
+    // retains the supplied fallback value for older JSON snapshots.
+    private static string ReadScancode(
+        JsonElement value,
+        string fallback,
+        string unassignedValue)
+    {
+        if (value.ValueKind == JsonValueKind.Undefined)
+            return fallback;
+
+        if (value.ValueKind == JsonValueKind.Null)
+            return unassignedValue;
+
+        if (value.ValueKind == JsonValueKind.String)
+        {
+            string text = value.GetString() ?? "";
+
+            if (string.Equals(
+                text,
+                "0xFFFFFFFF",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return unassignedValue;
+            }
+
+            // Preserve the original representation of legacy string values.
+            // The existing BindingRow continues to handle internal normalization.
+            return text;
+        }
+
+        if (value.ValueKind == JsonValueKind.Number &&
+            value.TryGetUInt32(out uint numericValue))
+        {
+            if (numericValue == uint.MaxValue)
+                return unassignedValue;
+
+            if (numericValue == 0)
+                return "0";
+
+            return "0x" + numericValue.ToString(
+                "X",
+                CultureInfo.InvariantCulture);
+        }
+
+        throw new FormatException(
+            $"Invalid keyboard scancode JSON value: {value.GetRawText()}");
+    }
+
     private static bool IsJsonRowUserModified(JsonKeyboardBindingRow jsonRow, BindingRow fullRow)
     {
         if (jsonRow.IsModified.HasValue)
@@ -574,14 +633,24 @@ public sealed class JsonKeyboardBindingReaderService
         if (jsonRow.Unused.HasValue)
             bindingRow.Unused = jsonRow.Unused.Value;
 
-        if (jsonRow.KeyScancode is not null)
-            bindingRow.KeyScancode = jsonRow.KeyScancode;
+        if (jsonRow.KeyScancode.ValueKind != JsonValueKind.Undefined)
+        {
+            bindingRow.KeyScancode = ReadScancode(
+                jsonRow.KeyScancode,
+                bindingRow.KeyScancode,
+                "0xFFFFFFFF");
+        }
 
         if (jsonRow.KeyModifierFlags.HasValue)
             bindingRow.KeyModifierFlags = jsonRow.KeyModifierFlags.Value;
 
-        if (jsonRow.ChordScancode is not null)
-            bindingRow.ChordScancode = jsonRow.ChordScancode;
+        if (jsonRow.ChordScancode.ValueKind != JsonValueKind.Undefined)
+        {
+            bindingRow.ChordScancode = ReadScancode(
+                jsonRow.ChordScancode,
+                bindingRow.ChordScancode,
+                "0xFFFFFFFF");
+        }
 
         if (jsonRow.ChordModifierFlags.HasValue)
             bindingRow.ChordModifierFlags = jsonRow.ChordModifierFlags.Value;
@@ -597,19 +666,39 @@ public sealed class JsonKeyboardBindingReaderService
         if (jsonRow.Unused.HasValue && jsonRow.Unused.Value != fullRow.Unused)
             return true;
 
-        if (jsonRow.KeyScancode is not null &&
-            !string.Equals(jsonRow.KeyScancode, fullRow.KeyScancode, StringComparison.OrdinalIgnoreCase))
+        if (jsonRow.KeyScancode.ValueKind != JsonValueKind.Undefined)
         {
-            return true;
+            string keyScancode = ReadScancode(
+                jsonRow.KeyScancode,
+                fullRow.KeyScancode,
+                "0xFFFFFFFF");
+
+            if (!string.Equals(
+                keyScancode,
+                fullRow.KeyScancode,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
         }
 
         if (jsonRow.KeyModifierFlags.HasValue && jsonRow.KeyModifierFlags.Value != fullRow.KeyModifierFlags)
             return true;
 
-        if (jsonRow.ChordScancode is not null &&
-            !string.Equals(jsonRow.ChordScancode, fullRow.ChordScancode, StringComparison.OrdinalIgnoreCase))
+        if (jsonRow.ChordScancode.ValueKind != JsonValueKind.Undefined)
         {
-            return true;
+            string chordScancode = ReadScancode(
+                jsonRow.ChordScancode,
+                fullRow.ChordScancode,
+                "0xFFFFFFFF");
+
+            if (!string.Equals(
+                chordScancode,
+                fullRow.ChordScancode,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
         }
 
         if (jsonRow.ChordModifierFlags.HasValue && jsonRow.ChordModifierFlags.Value != fullRow.ChordModifierFlags)
@@ -698,13 +787,13 @@ public sealed class JsonKeyboardBindingReaderService
         public int? SoundId { get; set; }
 
         [DataMember(Name = "key_scancode")]
-        public string? KeyScancode { get; set; }
+        public JsonElement KeyScancode { get; set; }
 
         [DataMember(Name = "key_modifier_flags")]
         public int? KeyModifierFlags { get; set; }
 
         [DataMember(Name = "chord_scancode")]
-        public string? ChordScancode { get; set; }
+        public JsonElement ChordScancode { get; set; }
 
         [DataMember(Name = "chord_modifier_flags")]
         public int? ChordModifierFlags { get; set; }

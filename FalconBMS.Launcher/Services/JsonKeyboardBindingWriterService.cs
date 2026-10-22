@@ -1,6 +1,7 @@
 ﻿using FalconBMS.Launcher.Models;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -150,7 +151,7 @@ public sealed class JsonKeyboardBindingWriterService
             BuildUserModifiedComboSet(profile.Rows);
 
         sb.AppendLine("{");
-        WriteProperty(sb, 1, "schema_version", 1, comma: true);
+        WriteProperty(sb, 1, "schema_version", 2, comma: true);
         WriteProperty(sb, 1, "binding_type", "keyboard", comma: true);
         WriteProperty(sb, 1, "aircraft_profile", profile.AircraftProfile, comma: true);
         WriteProperty(sb, 1, "source_catalog_path", profile.SourceCatalogPath, comma: true);
@@ -211,9 +212,9 @@ public sealed class JsonKeyboardBindingWriterService
                 ? row.SuppressedDefaultChordModifierFlags
                 : row.ChordModifierFlags;
 
-            WriteProperty(sb, 3, "key_scancode", NormalizeUnassignedScancode(jsonKeyScancode), comma: true);
+            WriteProperty(sb, 3, "key_scancode", ParseScancode(jsonKeyScancode), comma: true);
             WriteProperty(sb, 3, "key_modifier_flags", jsonKeyModifierFlags, comma: true);
-            WriteProperty(sb, 3, "chord_scancode", NormalizeUnassignedScancode(jsonChordScancode), comma: true);
+            WriteProperty(sb, 3, "chord_scancode", ParseScancode(jsonChordScancode), comma: true);
             WriteProperty(sb, 3, "chord_modifier_flags", jsonChordModifierFlags, comma: true);
 
             WriteProperty(sb, 3, "unused", row.Unused, comma: true);
@@ -237,16 +238,45 @@ public sealed class JsonKeyboardBindingWriterService
         return sb.ToString();
     }
 
-    // Ensure JSON always uses the canonical unassigned sentinel,
-    // regardless of the original BMS key file or imported JSON format.
-    private static string NormalizeUnassignedScancode(string value)
+    // Convert internal BMS scancodes into nullable numeric JSON values.
+    // Unassigned keys are saved as null instead of 0xFFFFFFFF in JSON.
+    private static uint? ParseScancode(string value)
     {
-        return string.Equals(
-            value,
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        string scancode = value.Trim();
+
+        if (string.Equals(
+            scancode,
             "0xFFFFFFFF",
-            StringComparison.OrdinalIgnoreCase)
-            ? "0xFFFFFFFF"
-            : value;
+            StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (scancode.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+        {
+            if (uint.TryParse(
+                scancode.Substring(2),
+                NumberStyles.HexNumber,
+                CultureInfo.InvariantCulture,
+                out uint hexValue))
+            {
+                return hexValue == uint.MaxValue ? null : hexValue;
+            }
+        }
+        else if (uint.TryParse(
+            scancode,
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out uint decimalValue))
+        {
+            return decimalValue == uint.MaxValue ? null : decimalValue;
+        }
+
+        throw new FormatException(
+            $"Invalid keyboard scancode: {value}");
     }
 
     private static HashSet<string> BuildUserModifiedComboSet(
@@ -314,6 +344,28 @@ public sealed class JsonKeyboardBindingWriterService
         sb.Append(EscapeJson(name));
         sb.Append("\": ");
         sb.Append(value);
+
+        if (comma)
+            sb.Append(',');
+
+        sb.AppendLine();
+    }
+
+    private static void WriteProperty(StringBuilder sb, int indentLevel, string name, uint? value, bool comma)
+    {
+        Indent(sb, indentLevel);
+        sb.Append('"');
+        sb.Append(EscapeJson(name));
+        sb.Append("\": ");
+
+        if (value.HasValue)
+        {
+            sb.Append(value.Value.ToString(CultureInfo.InvariantCulture));
+        }
+        else
+        {
+            sb.Append("null");
+        }
 
         if (comma)
             sb.Append(',');
