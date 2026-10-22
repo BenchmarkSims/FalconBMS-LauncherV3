@@ -29,17 +29,22 @@
                     Grid.Column="0"
                     Style="{StaticResource DashboardCardStyle}">
                 <StackPanel>
-                    <CheckBox Content="Use Roll Axis for Steering While on the Ground"
-                              IsChecked="{Binding UseRollAxisForNws, Mode=TwoWay}"
+                    <CheckBox Content="Smart Scaling"
+                              IsChecked="{Binding SmartScalingEnabled, Mode=TwoWay}"
                               FontWeight="Bold"
                               Margin="0,0,0,10"/>
 
-                    <TextBlock Text="Moving the stick left or right will cause the nose wheel to turn when the aircraft is on the ground."
+                    <TextBlock Text="Makes distant aircraft easier to see and identify during visual-range combat."
                                Style="{StaticResource BodyTextBlockStyle}"
                                TextWrapping="Wrap"
                                Margin="0,0,0,8"/>
 
-                    <TextBlock Text="This option disables the yaw axis."
+                    <TextBlock Text="Real-world pilots can see small aircraft details from far away that are often lost on monitors. Smart Scaling helps compensate for this by slightly enlarging distant targets so their pitch, bank, heading, and orientation are easier to judge."
+                               Style="{StaticResource BodyTextBlockStyle}"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,8"/>
+
+                    <TextBlock Text="The effect is minimal at close range and increases at longer visual ranges, helping improve target orientation without making nearby aircraft look unnaturally large."
                                Style="{StaticResource BodyTextBlockStyle}"
                                TextWrapping="Wrap"/>
                 </StackPanel>
@@ -137,31 +142,6 @@
                                Margin="0,0,0,8"/>
 
                     <TextBlock Text="This includes the visible pilot model and kneeboards from the cockpit view."
-                               Style="{StaticResource BodyTextBlockStyle}"
-                               TextWrapping="Wrap"/>
-                </StackPanel>
-            </Border>
-
-            <Border Grid.Row="4"
-                    Grid.Column="2"
-                    Style="{StaticResource DashboardCardStyle}">
-                <StackPanel>
-                    <CheckBox Content="Smart Scaling"
-                              IsChecked="{Binding SmartScalingEnabled, Mode=TwoWay}"
-                              FontWeight="Bold"
-                              Margin="0,0,0,10"/>
-
-                    <TextBlock Text="Makes distant aircraft easier to see and identify during visual-range combat."
-                               Style="{StaticResource BodyTextBlockStyle}"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,8"/>
-
-                    <TextBlock Text="Real-world pilots can see small aircraft details from far away that are often lost on monitors. Smart Scaling helps compensate for this by slightly enlarging distant targets so their pitch, bank, heading, and orientation are easier to judge."
-                               Style="{StaticResource BodyTextBlockStyle}"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,8"/>
-
-                    <TextBlock Text="The effect is minimal at close range and increases at longer visual ranges, helping improve target orientation without making nearby aircraft look unnaturally large."
                                Style="{StaticResource BodyTextBlockStyle}"
                                TextWrapping="Wrap"/>
                 </StackPanel>
