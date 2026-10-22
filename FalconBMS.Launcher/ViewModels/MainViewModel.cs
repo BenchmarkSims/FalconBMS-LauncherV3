@@ -281,6 +281,7 @@ public sealed class MainViewModel : ViewModelBase
         }
     }
 
+
     private bool _launchDebug = Properties.Settings.Default.CMD_MONO;
     public bool LaunchDebug
     {
@@ -292,6 +293,43 @@ public sealed class MainViewModel : ViewModelBase
             Properties.Settings.Default.Save();
         }
     }
+
+    private bool _closeLauncherOnBmsLaunch =
+        Properties.Settings.Default.CloseLauncherOnBmsLaunch;
+
+    public bool MinimizeLauncherOnBmsLaunch
+    {
+        get => !_closeLauncherOnBmsLaunch;
+        set
+        {
+            if (!value) return;
+            SetCloseLauncherOnBmsLaunch(false);
+        }
+    }
+
+    public bool CloseLauncherOnBmsLaunch
+    {
+        get => _closeLauncherOnBmsLaunch;
+        set
+        {
+            if (!value) return;
+            SetCloseLauncherOnBmsLaunch(true);
+        }
+    }
+
+    private void SetCloseLauncherOnBmsLaunch(bool closeLauncher)
+    {
+        if (!Set(ref _closeLauncherOnBmsLaunch, closeLauncher))
+            return;
+
+        Properties.Settings.Default.CloseLauncherOnBmsLaunch =
+            closeLauncher;
+
+        Properties.Settings.Default.Save();
+
+        OnPropertyChanged(nameof(MinimizeLauncherOnBmsLaunch));
+    }
+
 
     // Look for -nocontrols parameter
     public bool NoControlsMode { get; } =
@@ -1158,26 +1196,35 @@ public sealed class MainViewModel : ViewModelBase
             var arguments = BuildFalconArguments();
             DebugDiagnosticsService.Info($"Falcon launch arguments: {arguments}");
 
+
             var p = _proc.CreateFalconProcess(SelectedInstall.FalconExePath, arguments);
 
-            p.Exited += (_, _) =>
+            // Capture the selected behavior for this launch
+            bool closeLauncherAfterLaunch = CloseLauncherOnBmsLaunch;
+
+            if (!closeLauncherAfterLaunch)
             {
-                DebugDiagnosticsService.Info("Falcon process exited.");
-
-                Application.Current.Dispatcher.Invoke(() =>
+                // Restore the Launcher when Falcon BMS exits.
+                // This is only needed when the Launcher remains running.
+                p.Exited += (_, _) =>
                 {
-                    var w = Application.Current.MainWindow;
-                    if (w is not null)
+                    DebugDiagnosticsService.Info("Falcon process exited.");
+
+                    Application.Current.Dispatcher.Invoke(() =>
                     {
-                        w.WindowState = WindowState.Normal;
-                        w.Activate();
-                    }
+                        var w = Application.Current.MainWindow;
+                        if (w is not null)
+                        {
+                            w.WindowState = WindowState.Normal;
+                            w.Activate();
+                        }
 
-                    StatusText = "";
-                });
-            };
+                        StatusText = "";
+                    });
+                };
 
-            p.EnableRaisingEvents = true;
+                p.EnableRaisingEvents = true;
+            }
 
             DebugDiagnosticsService.Info(
                 $"Launching EXE: {SelectedInstall.FalconExePath} {arguments}".TrimEnd());
@@ -1190,9 +1237,24 @@ public sealed class MainViewModel : ViewModelBase
             var mainWindow = Application.Current.MainWindow;
             if (mainWindow is not null)
             {
-                mainWindow.WindowState = WindowState.Minimized;
-                DebugDiagnosticsService.Info("Launcher minimized after Falcon process start.");
+                if (closeLauncherAfterLaunch)
+                {
+                    DebugDiagnosticsService.Info(
+                        "Closing Launcher after successful Falcon process start.");
+
+                    // Use the existing window close pipeline.
+                    // This preserves output-save checks and DirectInput cleanup.
+                    mainWindow.Close();
+                }
+                else
+                {
+                    mainWindow.WindowState = WindowState.Minimized;
+
+                    DebugDiagnosticsService.Info(
+                        "Launcher minimized after Falcon process start.");
+                }
             }
+
         }
         catch (Exception ex)
         {

@@ -310,5 +310,17 @@ namespace FalconBMS.Launcher.Properties {
                 this["LegacyImportPromptHandled"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool CloseLauncherOnBmsLaunch {
+            get {
+                return ((bool)(this["CloseLauncherOnBmsLaunch"]));
+            }
+            set {
+                this["CloseLauncherOnBmsLaunch"] = value;
+            }
+        }
     }
 }
