@@ -41,10 +41,16 @@ public sealed class DeviceButtonBinding
 
     public static int NormalizeAssignmentIndexForCallback(string callbackName, int assignmentIndex)
     {
-        // DX Shift callbacks are special launcher/system callbacks.
-        return IsDxShiftCallback(callbackName)
-            ? 0
-            : assignmentIndex;
+        if (!IsDxShiftCallback(callbackName))
+            return assignmentIndex;
+
+        // DX Shift modifier callbacks use both press slots:
+        // 0 = Unshifted + Press
+        // 1 = Shifted + Press
+        //
+        // Preserve these slots when loading and saving.
+        // Release slots are not supported for DX Shift modifiers.
+        return assignmentIndex == 1 ? 1 : 0;
     }
 
     public static int GetAssignmentIndex(string shiftState, string trigger)

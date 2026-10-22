@@ -605,7 +605,21 @@ public sealed class KeyMappingWindowViewModel : ViewModelBase, IDisposable
     {
         if (DeviceButtonBinding.IsDxShiftCallback(_row.CallbackName))
         {
-            AddPendingDxButton(deviceKey, buttonIndex, 0);
+            // DX Shift modifiers must be assigned in both press layers.
+            // This allows the same physical button to activate the modifier
+            // regardless of the current DX shift state.
+
+            int unshiftedPressIndex = DeviceButtonBinding.GetAssignmentIndex(
+                DeviceButtonBinding.ShiftStateUnshifted,
+                DeviceButtonBinding.TriggerPress);
+
+            int shiftedPressIndex = DeviceButtonBinding.GetAssignmentIndex(
+                DeviceButtonBinding.ShiftStateShifted,
+                DeviceButtonBinding.TriggerPress);
+
+            AddPendingDxButton(deviceKey, buttonIndex, unshiftedPressIndex);
+            AddPendingDxButton(deviceKey, buttonIndex, shiftedPressIndex);
+
             return;
         }
 
