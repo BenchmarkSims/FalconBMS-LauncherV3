@@ -172,6 +172,7 @@
                                     <ComboBox Width="120"
                                               HorizontalAlignment="Left"
                                               VerticalAlignment="Center"
+                                              FontWeight="SemiBold"
                                               ItemsSource="{Binding ShiftOptions}"
                                               SelectedItem="{Binding ShiftState, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                               IsEnabled="{Binding IsShiftSelectionEnabled}"/>
@@ -192,6 +193,7 @@
                                     <ComboBox Width="100"
                                               HorizontalAlignment="Left"
                                               VerticalAlignment="Center"
+                                              FontWeight="SemiBold"
                                               ItemsSource="{Binding TriggerOptions}"
                                               SelectedItem="{Binding Trigger, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                               IsEnabled="{Binding IsTriggerSelectionEnabled}"/>
