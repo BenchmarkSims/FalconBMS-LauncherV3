@@ -1024,7 +1024,7 @@
     <DxAssgn>
       <assign>
         <Assgn>
-          <Callback>SimRadarGainUp</Callback>
+          <Callback>SimCBEOSB_GAINUP_L</Callback>
           <Invoke>Default</Invoke>
           <SoundID>0</SoundID>
         </Assgn>
@@ -1048,7 +1048,7 @@
     <DxAssgn>
       <assign>
         <Assgn>
-          <Callback>SimRadarGainDown</Callback>
+          <Callback>SimCBEOSB_GAINDOWN_L</Callback>
           <Invoke>Default</Invoke>
           <SoundID>0</SoundID>
         </Assgn>
