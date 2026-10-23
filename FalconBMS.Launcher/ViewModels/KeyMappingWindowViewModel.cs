@@ -3,6 +3,8 @@ using FalconBMS.Launcher.Models;
 using FalconBMS.Launcher.Utils;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using System.Windows;
 using System.Windows.Input;
@@ -59,13 +61,6 @@ public sealed class KeyMappingWindowViewModel : ViewModelBase, IDisposable
         private set => Set(ref _keyboardAssignmentText, value);
     }
 
-    private string _dxAssignmentText;
-    public string DxAssignmentText
-    {
-        get => _dxAssignmentText;
-        private set => Set(ref _dxAssignmentText, value);
-    }
-
     private string _keyboardConflictText = "";
     public string KeyboardConflictText
     {
@@ -80,47 +75,18 @@ public sealed class KeyMappingWindowViewModel : ViewModelBase, IDisposable
         private set => Set(ref _dxConflictText, value);
     }
 
-    private bool _isUnshifted = true;
-    public bool IsUnshifted
-    {
-        get => _isUnshifted;
-        set
-        {
-            if (!Set(ref _isUnshifted, value))
-                return;
+    // All assigned DX inputs, followed by one permanent awaiting-input row
+    public ObservableCollection<DxInputRowViewModel> DxInputRows { get; } = new();
 
-            OnPropertyChanged(nameof(IsShifted));
-        }
-    }
+    private readonly DxInputRowViewModel _awaitingDxRow;
 
-    public bool IsShifted
-    {
-        get => !IsUnshifted;
-        set => IsUnshifted = !value;
-    }
+    // Preserve the user's manual selection while physical DX Shift is held
+    private string _awaitingDxPresetShiftState =
+        DeviceButtonBinding.ShiftStateUnshifted;
 
-    private bool _isOnPress = true;
-    public bool IsOnPress
-    {
-        get => _isOnPress;
-        set
-        {
-            if (!Set(ref _isOnPress, value))
-                return;
+    // Prevent automatic changes from overwriting the manual selection
+    private bool _updatingAwaitingDxShiftState;
 
-            OnPropertyChanged(nameof(IsOnRelease));
-        }
-    }
-
-    public bool IsOnRelease
-    {
-        get => !IsOnPress;
-        set => IsOnPress = !value;
-    }
-
-    public bool IsDxOptionSelectionEnabled => !DeviceButtonBinding.IsDxShiftCallback(_row.CallbackName);
-
-    public ICommand ClearDxCommand { get; }
     public ICommand ClearKeyCommand { get; }
     public ICommand SaveCommand { get; }
     public ICommand CancelCommand { get; }
@@ -160,24 +126,27 @@ public sealed class KeyMappingWindowViewModel : ViewModelBase, IDisposable
         _tempChordScancode = row.ChordScancode;
         _tempChordModifierFlags = row.ChordModifierFlags;
 
+        // The waiting input row is always the final row in the table.
+        // Its selections determine how the next captured input is assigned.
+        _awaitingDxRow = new DxInputRowViewModel
+        {
+            IsAwaitingInput = true,
+            // Shown in the "Assigned Button" column until a button is pressed
+            InputText = "Press any button to assign",
+            IsShiftSelectionEnabled =
+                !DeviceButtonBinding.IsDxShiftCallback(_row.CallbackName)
+        };
+
+        // Remember manual Shift selections independently of physical Shift
+        _awaitingDxRow.PropertyChanged += AwaitingDxRow_PropertyChanged;
+
+        DxInputRows.Add(_awaitingDxRow);
+
+        // Load saved assignments as individually editable rows
         LoadExistingDxBindings(row.CallbackName);
-        ForceBaseDxShiftStateIfNeeded();
 
         _keyboardAssignmentText = BuildKeyboardAssignmentPreview();
-        _dxAssignmentText = BuildDxAssignmentPreview();
         UpdateConflict();
-
-        ClearDxCommand = new RelayCommand(() =>
-        {
-            _pendingDxButtons.Clear();
-            _pendingDxPovs.Clear();
-
-            // Buffered DirectInput only reports changes. A button or POV that
-            // was already held when Clear DX was clicked does not generate a
-            // second DOWN event, so no polling warmup/baseline reset is needed
-            UpdateAssignmentPreviewTexts();
-            UpdateConflict();
-        });
 
         ClearKeyCommand = new RelayCommand(() =>
         {
@@ -186,7 +155,7 @@ public sealed class KeyMappingWindowViewModel : ViewModelBase, IDisposable
             _tempChordScancode = "0";
             _tempChordModifierFlags = 0;
 
-            UpdateAssignmentPreviewTexts();
+            UpdateKeyboardAssignmentPreview();
             UpdateConflict();
         });
 
@@ -247,6 +216,9 @@ public sealed class KeyMappingWindowViewModel : ViewModelBase, IDisposable
             Application.Current.Dispatcher,
             captureKeyboard: true,
             joystickDevices: joystickDevices);
+
+        // Reflect a physical DX Shift button that may already be held
+        UpdateAwaitingDxShiftDisplay();
     }
 
     public void StopCapture()
@@ -323,24 +295,46 @@ public sealed class KeyMappingWindowViewModel : ViewModelBase, IDisposable
         _tempChordModifierFlags =
             0;
 
-        UpdateAssignmentPreviewTexts();
+        UpdateKeyboardAssignmentPreview();
         UpdateConflict();
     }
+
 
     private void CaptureSession_JoystickButtonInput(
         object? sender,
         BufferedJoystickButtonEventArgs e)
     {
-        // The physical event identifies the DX button. Shifted/Unshifted
-        // and Press/Release remain manual choices in the popup.
+        // A previously assigned DX Shift button acts as a modifier.
+        // Update the awaiting row on both DOWN and UP events.
+        //
+        // When editing the DX Shift callback itself, the button
+        // must remain available for assignment.
+        if (!DeviceButtonBinding.IsDxShiftCallback(_row.CallbackName) &&
+            IsAssignedDxShiftButton(e.DeviceKey, e.ButtonIndex))
+        {
+            UpdateAwaitingDxShiftDisplay();
+            return;
+        }
+
+        // Normal DX assignments are created only on button down/press
         if (!e.IsPressed)
             return;
+
+        // Ensure the displayed state reflects any held DX Shift
+        UpdateAwaitingDxShiftDisplay();
+
+        int previousCount = _pendingDxButtons.Count;
 
         AddPendingDxButton(
             e.DeviceKey,
             e.ButtonIndex);
 
-        UpdateAssignmentPreviewTexts();
+        // Reset the manual preset for the next assignment.
+        // If physical Shift remains held, the dropdown stays Shifted.
+        if (_pendingDxButtons.Count > previousCount)
+            ResetAwaitingDxOptions();
+
+        UpdateKeyboardAssignmentPreview();
         UpdateConflict();
     }
 
@@ -348,20 +342,23 @@ public sealed class KeyMappingWindowViewModel : ViewModelBase, IDisposable
         object? sender,
         BufferedJoystickPovEventArgs e)
     {
-        int? direction =
-            e.Direction;
+        int? direction = e.Direction;
 
-        // Ignore the centered/released POV event. A new directional event
-        // will arrive the next time the hat is moved.
+        // Ignore POV returning to center
         if (!direction.HasValue)
             return;
+
+        int previousCount = _pendingDxPovs.Count;
 
         AddPendingDxPov(
             e.DeviceKey,
             e.PovIndex,
             direction.Value);
 
-        UpdateAssignmentPreviewTexts();
+        if (_pendingDxPovs.Count > previousCount)
+            ResetAwaitingDxOptions();
+
+        UpdateKeyboardAssignmentPreview();
         UpdateConflict();
     }
 
@@ -474,10 +471,9 @@ public sealed class KeyMappingWindowViewModel : ViewModelBase, IDisposable
             row.ChordModifierFlags);
     }
 
-    private void UpdateAssignmentPreviewTexts()
+    private void UpdateKeyboardAssignmentPreview()
     {
         KeyboardAssignmentText = BuildKeyboardAssignmentPreview();
-        DxAssignmentText = BuildDxAssignmentPreview();
     }
 
     private string BuildKeyboardAssignmentPreview()
@@ -487,39 +483,6 @@ public sealed class KeyMappingWindowViewModel : ViewModelBase, IDisposable
         return string.IsNullOrWhiteSpace(keyText)
             ? "Press any key to assign"
             : keyText;
-    }
-
-    private string BuildDxAssignmentPreview()
-    {
-        var parts = new List<string>();
-
-        foreach (PendingDxButton pendingDxButton in _pendingDxButtons)
-        {
-            DeviceBindingProfile? device = _deviceProfiles.FirstOrDefault(d =>
-                string.Equals(d.DurableDeviceKey, pendingDxButton.DeviceKey, StringComparison.OrdinalIgnoreCase));
-
-            string deviceName = device?.ProductName
-                ?? device?.InstanceName
-                ?? pendingDxButton.DeviceKey;
-
-            parts.Add(deviceName + " " + DeviceButtonBinding.BuildDisplayText(pendingDxButton.ButtonIndex, pendingDxButton.AssignmentIndex));
-        }
-
-        foreach (PendingDxPov pendingDxPov in _pendingDxPovs)
-        {
-            DeviceBindingProfile? device = _deviceProfiles.FirstOrDefault(d =>
-                string.Equals(d.DurableDeviceKey, pendingDxPov.DeviceKey, StringComparison.OrdinalIgnoreCase));
-
-            string deviceName = device?.ProductName
-                ?? device?.InstanceName
-                ?? pendingDxPov.DeviceKey;
-
-            parts.Add(deviceName + " " + BuildPovDisplayText(pendingDxPov.PovIndex, pendingDxPov.Direction, pendingDxPov.Invoke));
-        }
-
-        return parts.Count == 0
-            ? "Press any button to assign"
-            : string.Join(" / ", parts);
     }
 
     private string BuildKeyboardAssignmentText()
@@ -533,151 +496,196 @@ public sealed class KeyMappingWindowViewModel : ViewModelBase, IDisposable
 
     private void LoadExistingDxBindings(string callbackName)
     {
-        var existingButtonBindings = new List<DeviceButtonBinding>();
-        var existingPovBindings = new List<DevicePovBinding>();
-
         foreach (DeviceBindingProfile device in _deviceProfiles)
         {
-            DeviceAircraftBindingProfile? aircraft = device.AircraftProfiles.FirstOrDefault(profile =>
-                string.Equals(profile.AircraftProfile, _aircraftProfileName, StringComparison.OrdinalIgnoreCase));
+            DeviceAircraftBindingProfile? aircraft =
+                GetActiveAircraftProfile(device);
 
             if (aircraft is null)
                 continue;
 
+            // Load each existing DX button assignment.
+            // Its saved assignment index determines the row's
+            // initial Shift State and Trigger selections.
             foreach (DeviceButtonBinding binding in aircraft.ButtonBindings
-                         .Where(button => string.Equals(button.CallbackName, callbackName, StringComparison.OrdinalIgnoreCase))
+                         .Where(button =>
+                             string.Equals(
+                                 button.CallbackName,
+                                 callbackName,
+                                 StringComparison.OrdinalIgnoreCase))
                          .OrderBy(button => button.ButtonIndex)
                          .ThenBy(button => button.AssignmentIndex))
             {
-                int assignmentIndex = DeviceButtonBinding.NormalizeAssignmentIndexForCallback(callbackName, binding.AssignmentIndex);
+                int assignmentIndex =
+                    DeviceButtonBinding.NormalizeAssignmentIndexForCallback(
+                        callbackName,
+                        binding.AssignmentIndex);
 
-                existingButtonBindings.Add(binding);
-                AddPendingDxButton(device.DurableDeviceKey, binding.ButtonIndex, assignmentIndex);
+                AddPendingDxButton(
+                    device.DurableDeviceKey,
+                    binding.ButtonIndex,
+                    assignmentIndex);
             }
 
+            // POV directions also appear as seperate DX rows
             foreach (DevicePovBinding binding in aircraft.PovBindings
-                         .Where(pov => string.Equals(pov.CallbackName, callbackName, StringComparison.OrdinalIgnoreCase))
+                         .Where(pov =>
+                             string.Equals(
+                                 pov.CallbackName,
+                                 callbackName,
+                                 StringComparison.OrdinalIgnoreCase))
                          .OrderBy(pov => pov.PovIndex)
                          .ThenBy(pov => pov.Direction)
                          .ThenBy(pov => pov.Invoke))
             {
-                string invoke = NormalizePovInvoke(binding.Invoke);
-
-                existingPovBindings.Add(binding);
-                AddPendingDxPov(device.DurableDeviceKey, binding.PovIndex, binding.Direction, invoke);
+                AddPendingDxPov(
+                    device.DurableDeviceKey,
+                    binding.PovIndex,
+                    binding.Direction,
+                    NormalizePovInvoke(binding.Invoke));
             }
         }
 
-        if (existingButtonBindings.Count == 0 && existingPovBindings.Count == 0)
-            return;
-
-        if (DeviceButtonBinding.IsDxShiftCallback(callbackName))
-        {
-            ForceBaseDxShiftStateIfNeeded();
-            return;
-        }
-
-        // Use the first existing DX binding to initialize the radio buttons.
-        // Most rows only have one DX binding. If a row has multiple DX bindings,
-        // the preview still shows all of them, and this simply sets the default
-        // radio state for the next DX input the user captures.
-        if (existingButtonBindings.Count > 0)
-        {
-            DeviceButtonBinding firstBinding = existingButtonBindings[0];
-
-            IsUnshifted = DeviceButtonBinding.GetShiftState(firstBinding.AssignmentIndex) == DeviceButtonBinding.ShiftStateUnshifted;
-            IsOnPress = DeviceButtonBinding.GetTrigger(firstBinding.AssignmentIndex) == DeviceButtonBinding.TriggerPress;
-            return;
-        }
-
-        DevicePovBinding firstPovBinding = existingPovBindings[0];
-
-        IsUnshifted = !string.Equals(
-            NormalizePovInvoke(firstPovBinding.Invoke),
-            PovInvokeShift,
-            StringComparison.OrdinalIgnoreCase);
-
-        // POV bindings are directional press-style DX inputs. There is no separate POV release slot.
-        IsOnPress = true;
+        // The awaiting-input row keeps its own defaults:
+        // Unshifted + Press
     }
 
     private void AddPendingDxButton(string deviceKey, int buttonIndex)
     {
         if (DeviceButtonBinding.IsDxShiftCallback(_row.CallbackName))
         {
-            // DX Shift modifiers must be assigned in both press layers.
-            // This allows the same physical button to activate the modifier
-            // regardless of the current DX shift state.
-
-            int unshiftedPressIndex = DeviceButtonBinding.GetAssignmentIndex(
-                DeviceButtonBinding.ShiftStateUnshifted,
-                DeviceButtonBinding.TriggerPress);
-
-            int shiftedPressIndex = DeviceButtonBinding.GetAssignmentIndex(
-                DeviceButtonBinding.ShiftStateShifted,
-                DeviceButtonBinding.TriggerPress);
-
-            AddPendingDxButton(deviceKey, buttonIndex, unshiftedPressIndex);
-            AddPendingDxButton(deviceKey, buttonIndex, shiftedPressIndex);
-
+            // DX Shift callbacks must occupy both
+            AddPendingDxButton(deviceKey, buttonIndex, 0);
+            AddPendingDxButton(deviceKey, buttonIndex, 1);
             return;
         }
 
-        string shiftState = IsUnshifted
-            ? DeviceButtonBinding.ShiftStateUnshifted
-            : DeviceButtonBinding.ShiftStateShifted;
+        // The awaiting row supplies the default shift state
+        string shiftState = _awaitingDxRow.ShiftState;
 
-        string trigger = IsOnPress
-            ? DeviceButtonBinding.TriggerPress
-            : DeviceButtonBinding.TriggerRelease;
+        // Holding an assigned physical DX Shift button always
+        // overrides an Unshifted preset.
+        if (IsPhysicalDxShiftHeld())
+            shiftState = DeviceButtonBinding.ShiftStateShifted;
 
-        AddPendingDxButton(deviceKey, buttonIndex, DeviceButtonBinding.GetAssignmentIndex(shiftState, trigger));
+        string trigger = _awaitingDxRow.Trigger;
+
+        int assignmentIndex =
+            DeviceButtonBinding.GetAssignmentIndex(
+                shiftState,
+                trigger);
+
+        AddPendingDxButton(
+            deviceKey,
+            buttonIndex,
+            assignmentIndex);
     }
 
-    private void AddPendingDxButton(string deviceKey, int buttonIndex, int assignmentIndex)
+    private void AddPendingDxButton(
+        string deviceKey,
+        int buttonIndex,
+        int assignmentIndex)
     {
-        assignmentIndex = DeviceButtonBinding.NormalizeAssignmentIndexForCallback(_row.CallbackName, assignmentIndex);
+        assignmentIndex =
+            DeviceButtonBinding.NormalizeAssignmentIndexForCallback(
+                _row.CallbackName,
+                assignmentIndex);
 
         bool alreadyPending = _pendingDxButtons.Any(button =>
-            string.Equals(button.DeviceKey, deviceKey, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(
+                button.DeviceKey,
+                deviceKey,
+                StringComparison.OrdinalIgnoreCase) &&
             button.ButtonIndex == buttonIndex &&
             button.AssignmentIndex == assignmentIndex);
 
         if (alreadyPending)
             return;
 
-        // Keep the list stable and readable in the popup preview.
         _pendingDxButtons.Add(new PendingDxButton
         {
             DeviceKey = deviceKey,
             ButtonIndex = buttonIndex,
             AssignmentIndex = assignmentIndex
         });
+
+        bool isDxShiftCallback =
+            DeviceButtonBinding.IsDxShiftCallback(_row.CallbackName);
+
+        // The same physical DX Shift button uses two internal slots,
+        // but should appear as only one row in the UI
+        bool rowAlreadyExists = DxInputRows.Any(input =>
+            !input.IsAwaitingInput &&
+            input.ButtonIndex == buttonIndex &&
+            string.Equals(
+                input.DeviceKey,
+                deviceKey,
+                StringComparison.OrdinalIgnoreCase) &&
+            (isDxShiftCallback ||
+             DeviceButtonBinding.GetAssignmentIndex(
+                 input.ShiftState,
+                 input.Trigger) == assignmentIndex));
+
+        if (rowAlreadyExists)
+            return;
+
+        AddDxInputRow(
+            deviceKey,
+            buttonIndex,
+            null,
+            null,
+            isDxShiftCallback
+                ? DeviceButtonBinding.ShiftStateUnshifted
+                : DeviceButtonBinding.GetShiftState(assignmentIndex),
+            isDxShiftCallback
+                ? DeviceButtonBinding.TriggerPress
+                : DeviceButtonBinding.GetTrigger(assignmentIndex));
     }
 
-    private void AddPendingDxPov(string deviceKey, int povIndex, int direction)
+    private void AddPendingDxPov(
+        string deviceKey,
+        int povIndex,
+        int direction)
     {
-        string invoke = IsUnshifted || DeviceButtonBinding.IsDxShiftCallback(_row.CallbackName)
-            ? PovInvokeDefault
-            : PovInvokeShift;
+        bool isShifted =
+            !DeviceButtonBinding.IsDxShiftCallback(_row.CallbackName) &&
+            (_awaitingDxRow.ShiftState ==
+                 DeviceButtonBinding.ShiftStateShifted ||
+             IsPhysicalDxShiftHeld());
 
-        AddPendingDxPov(deviceKey, povIndex, direction, invoke);
+        string invoke =
+            isShifted ? PovInvokeShift : PovInvokeDefault;
+
+        AddPendingDxPov(
+            deviceKey,
+            povIndex,
+            direction,
+            invoke);
     }
 
-    private void AddPendingDxPov(string deviceKey, int povIndex, int direction, string invoke)
+    private void AddPendingDxPov(
+        string deviceKey,
+        int povIndex,
+        int direction,
+        string invoke)
     {
         invoke = NormalizePovInvoke(invoke);
 
         bool alreadyPending = _pendingDxPovs.Any(pov =>
-            string.Equals(pov.DeviceKey, deviceKey, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(
+                pov.DeviceKey,
+                deviceKey,
+                StringComparison.OrdinalIgnoreCase) &&
             pov.PovIndex == povIndex &&
             pov.Direction == direction &&
-            string.Equals(pov.Invoke, invoke, StringComparison.OrdinalIgnoreCase));
+            string.Equals(
+                pov.Invoke,
+                invoke,
+                StringComparison.OrdinalIgnoreCase));
 
         if (alreadyPending)
             return;
 
-        // Keep the list stable and readable in the popup preview
         _pendingDxPovs.Add(new PendingDxPov
         {
             DeviceKey = deviceKey,
@@ -685,15 +693,338 @@ public sealed class KeyMappingWindowViewModel : ViewModelBase, IDisposable
             Direction = direction,
             Invoke = invoke
         });
+
+        string shiftState =
+            invoke == PovInvokeShift
+                ? DeviceButtonBinding.ShiftStateShifted
+                : DeviceButtonBinding.ShiftStateUnshifted;
+
+        AddDxInputRow(
+            deviceKey,
+            null,
+            povIndex,
+            direction,
+            shiftState,
+            DeviceButtonBinding.TriggerPress);
     }
 
-    private void ForceBaseDxShiftStateIfNeeded()
+    private void AddDxInputRow(
+        string deviceKey,
+        int? buttonIndex,
+        int? povIndex,
+        int? direction,
+        string shiftState,
+        string trigger)
     {
-        if (!DeviceButtonBinding.IsDxShiftCallback(_row.CallbackName))
+        string inputName;
+
+        if (buttonIndex.HasValue)
+        {
+            inputName = "DX" + (buttonIndex.Value + 1);
+        }
+        else
+        {
+            inputName = BuildPovDisplayText(
+                povIndex.GetValueOrDefault(),
+                direction.GetValueOrDefault(),
+                PovInvokeDefault);
+        }
+
+        var inputRow = new DxInputRowViewModel
+        {
+            DeviceKey = deviceKey,
+            ButtonIndex = buttonIndex,
+            PovIndex = povIndex,
+            Direction = direction,
+            InputText = GetDeviceDisplayName(deviceKey) + " " + inputName,
+            ShiftState = shiftState,
+            Trigger = trigger,
+            IsShiftSelectionEnabled =
+                !DeviceButtonBinding.IsDxShiftCallback(_row.CallbackName)
+        };
+
+        // Each assigned row removes only itself
+        inputRow.ClearCommand =
+            new RelayCommand(() => RemoveDxInputRow(inputRow));
+
+        // Detect changes to an existing row's dropdown selections
+        inputRow.PropertyChanged += DxInputRow_PropertyChanged;
+
+        // Always insert immediately above the awaiting input row
+        DxInputRows.Insert(DxInputRows.Count - 1, inputRow);
+    }
+
+    private void RemoveDxInputRow(DxInputRowViewModel inputRow)
+    {
+        if (inputRow.IsAwaitingInput)
             return;
 
-        IsUnshifted = true;
-        IsOnPress = true;
+        inputRow.PropertyChanged -= DxInputRow_PropertyChanged;
+
+        if (!DxInputRows.Remove(inputRow))
+            return;
+
+        RebuildPendingDxBindingsFromRows();
+        UpdateKeyboardAssignmentPreview();
+        UpdateConflict();
+    }
+
+    private void DxInputRow_PropertyChanged(
+        object? sender,
+        PropertyChangedEventArgs e)
+    {
+        if (sender is not DxInputRowViewModel changedRow)
+            return;
+
+        if (e.PropertyName != nameof(DxInputRowViewModel.ShiftState) &&
+            e.PropertyName != nameof(DxInputRowViewModel.Trigger))
+        {
+            return;
+        }
+
+        // If editing a row creates a duplicate physical input and slot,
+        // retain the edited row and remove the redundant assignment
+        foreach (DxInputRowViewModel duplicate in DxInputRows
+                     .Where(input =>
+                         !input.IsAwaitingInput &&
+                         !ReferenceEquals(input, changedRow) &&
+                         string.Equals(
+                             input.DeviceKey,
+                             changedRow.DeviceKey,
+                             StringComparison.OrdinalIgnoreCase) &&
+                         input.ButtonIndex == changedRow.ButtonIndex &&
+                         input.PovIndex == changedRow.PovIndex &&
+                         input.Direction == changedRow.Direction &&
+                         input.ShiftState == changedRow.ShiftState &&
+                         (input.IsPov ||
+                          input.Trigger == changedRow.Trigger))
+                     .ToList())
+        {
+            duplicate.PropertyChanged -= DxInputRow_PropertyChanged;
+            DxInputRows.Remove(duplicate);
+        }
+
+        RebuildPendingDxBindingsFromRows();
+        UpdateKeyboardAssignmentPreview();
+        UpdateConflict();
+    }
+
+    private void RebuildPendingDxBindingsFromRows()
+    {
+        _pendingDxButtons.Clear();
+        _pendingDxPovs.Clear();
+
+        bool isDxShiftCallback =
+            DeviceButtonBinding.IsDxShiftCallback(_row.CallbackName);
+
+        foreach (DxInputRowViewModel input in DxInputRows)
+        {
+            if (input.IsAwaitingInput)
+                continue;
+
+            if (input.ButtonIndex.HasValue)
+            {
+                // A DX Shift callback always uses both press slots
+                int[] assignmentIndices = isDxShiftCallback
+                    ? new[] { 0, 1 }
+                    : new[]
+                    {
+                        DeviceButtonBinding.GetAssignmentIndex(
+                            input.ShiftState,
+                            input.Trigger)
+                    };
+
+                foreach (int assignmentIndex in assignmentIndices)
+                {
+                    bool exists = _pendingDxButtons.Any(button =>
+                        string.Equals(
+                            button.DeviceKey,
+                            input.DeviceKey,
+                            StringComparison.OrdinalIgnoreCase) &&
+                        button.ButtonIndex == input.ButtonIndex.Value &&
+                        button.AssignmentIndex == assignmentIndex);
+
+                    if (exists)
+                        continue;
+
+                    _pendingDxButtons.Add(new PendingDxButton
+                    {
+                        DeviceKey = input.DeviceKey,
+                        ButtonIndex = input.ButtonIndex.Value,
+                        AssignmentIndex = assignmentIndex
+                    });
+                }
+            }
+            else if (input.PovIndex.HasValue &&
+                     input.Direction.HasValue)
+            {
+                string invoke =
+                    input.ShiftState == DeviceButtonBinding.ShiftStateShifted
+                        ? PovInvokeShift
+                        : PovInvokeDefault;
+
+                bool exists = _pendingDxPovs.Any(pov =>
+                    string.Equals(
+                        pov.DeviceKey,
+                        input.DeviceKey,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    pov.PovIndex == input.PovIndex.Value &&
+                    pov.Direction == input.Direction.Value &&
+                    string.Equals(
+                        pov.Invoke,
+                        invoke,
+                        StringComparison.OrdinalIgnoreCase));
+
+                if (exists)
+                    continue;
+
+                _pendingDxPovs.Add(new PendingDxPov
+                {
+                    DeviceKey = input.DeviceKey,
+                    PovIndex = input.PovIndex.Value,
+                    Direction = input.Direction.Value,
+                    Invoke = invoke
+                });
+            }
+        }
+    }
+
+    private void ResetAwaitingDxOptions()
+    {
+        // Reset the user's preset for the next DX assignment
+        _awaitingDxPresetShiftState =
+            DeviceButtonBinding.ShiftStateUnshifted;
+
+        _awaitingDxRow.Trigger =
+            DeviceButtonBinding.TriggerPress;
+
+        // Physical Shift still takes priority while held
+        UpdateAwaitingDxShiftDisplay();
+    }
+
+    private void AwaitingDxRow_PropertyChanged(
+        object? sender,
+        PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(DxInputRowViewModel.ShiftState))
+            return;
+
+        // An automatic display update is not a manual selection
+        if (_updatingAwaitingDxShiftState)
+            return;
+
+        // Remember the user's selection so it can be restored
+        // when the physical DX Shift button is released
+        _awaitingDxPresetShiftState = _awaitingDxRow.ShiftState;
+
+        // If physical Shift is held, it continues to take priority
+        UpdateAwaitingDxShiftDisplay();
+    }
+
+    private void UpdateAwaitingDxShiftDisplay()
+    {
+        // DX Shift callbacks have fixed assignment states
+        if (!_awaitingDxRow.IsShiftSelectionEnabled)
+            return;
+
+        string displayedShiftState = IsPhysicalDxShiftHeld()
+            ? DeviceButtonBinding.ShiftStateShifted
+            : _awaitingDxPresetShiftState;
+
+        if (_awaitingDxRow.ShiftState == displayedShiftState)
+            return;
+
+        // Update the dropdown without changing the manual preset
+        _updatingAwaitingDxShiftState = true;
+
+        try
+        {
+            _awaitingDxRow.ShiftState = displayedShiftState;
+        }
+        finally
+        {
+            _updatingAwaitingDxShiftState = false;
+        }
+    }
+
+    private DeviceAircraftBindingProfile? GetActiveAircraftProfile(
+        DeviceBindingProfile device)
+    {
+        return device.AircraftProfiles.FirstOrDefault(profile =>
+            string.Equals(
+                profile.AircraftProfile,
+                _aircraftProfileName,
+                StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string GetDeviceDisplayName(string deviceKey)
+    {
+        DeviceBindingProfile? device = _deviceProfiles.FirstOrDefault(
+            profile => string.Equals(
+                profile.DurableDeviceKey,
+                deviceKey,
+                StringComparison.OrdinalIgnoreCase));
+
+        return device?.ProductName
+            ?? device?.InstanceName
+            ?? deviceKey;
+    }
+
+    private bool IsAssignedDxShiftButton(
+        string deviceKey,
+        int buttonIndex)
+    {
+        DeviceBindingProfile? device = _deviceProfiles.FirstOrDefault(
+            profile => string.Equals(
+                profile.DurableDeviceKey,
+                deviceKey,
+                StringComparison.OrdinalIgnoreCase));
+
+        if (device is null)
+            return false;
+
+        DeviceAircraftBindingProfile? aircraft =
+            GetActiveAircraftProfile(device);
+
+        return aircraft?.ButtonBindings.Any(binding =>
+            binding.ButtonIndex == buttonIndex &&
+            DeviceButtonBinding.IsDxShiftCallback(
+                binding.CallbackName)) == true;
+    }
+
+    private bool IsPhysicalDxShiftHeld()
+    {
+        // Inspect existing shift bindings across connected devices.
+        // DirectInputCaptureHost exposes the current physical button state.
+        foreach (DeviceBindingProfile device in _deviceProfiles)
+        {
+            if (!device.IsConnected)
+                continue;
+
+            DeviceAircraftBindingProfile? aircraft =
+                GetActiveAircraftProfile(device);
+
+            if (aircraft is null)
+                continue;
+
+            foreach (DeviceButtonBinding binding in aircraft.ButtonBindings)
+            {
+                if (!DeviceButtonBinding.IsDxShiftCallback(
+                        binding.CallbackName))
+                {
+                    continue;
+                }
+
+                if (_captureHost.IsJoystickButtonPressed(
+                        device.DurableDeviceKey,
+                        binding.ButtonIndex))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private static string NormalizePovInvoke(string? invoke)
@@ -731,6 +1062,66 @@ public sealed class KeyMappingWindowViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
+        _awaitingDxRow.PropertyChanged -= AwaitingDxRow_PropertyChanged;
         _captureHost.Dispose();
     }
+}
+
+
+/// <summary>
+/// Represents one DX assignment row in the Key Mapping window.
+/// Each row maintains its own Shift State, Trigger, and Clear command.
+/// The final row is always listening for a new input.
+/// </summary>
+public sealed class DxInputRowViewModel : ViewModelBase
+{
+    private string _shiftState = DeviceButtonBinding.ShiftStateUnshifted;
+    private string _trigger = DeviceButtonBinding.TriggerPress;
+
+    public string DeviceKey { get; init; } = "";
+    public int? ButtonIndex { get; init; }
+    public int? PovIndex { get; init; }
+    public int? Direction { get; init; }
+
+    public string InputText { get; init; } = "";
+
+    public bool IsAwaitingInput { get; init; }
+
+    public bool IsPov => PovIndex.HasValue;
+
+    public bool IsShiftSelectionEnabled { get; init; } = true;
+
+    public bool IsTriggerSelectionEnabled =>
+        IsShiftSelectionEnabled && !IsPov;
+
+    public Visibility ClearVisibility =>
+        IsAwaitingInput ? Visibility.Hidden : Visibility.Visible;
+
+    public IReadOnlyList<string> ShiftOptions { get; } =
+        new[]
+        {
+            DeviceButtonBinding.ShiftStateUnshifted,
+            DeviceButtonBinding.ShiftStateShifted
+        };
+
+    public IReadOnlyList<string> TriggerOptions { get; } =
+        new[]
+        {
+            DeviceButtonBinding.TriggerPress,
+            DeviceButtonBinding.TriggerRelease
+        };
+
+    public string ShiftState
+    {
+        get => _shiftState;
+        set => Set(ref _shiftState, value);
+    }
+
+    public string Trigger
+    {
+        get => _trigger;
+        set => Set(ref _trigger, value);
+    }
+
+    public ICommand? ClearCommand { get; set; }
 }

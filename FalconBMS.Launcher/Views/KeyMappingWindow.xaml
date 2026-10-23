@@ -2,31 +2,30 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Key Mapping"
-        Width="650"
-        MinHeight="300"
+        Width="750"
+        MinHeight="460"
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         Background="{DynamicResource AppWindowBackgroundBrush}">
 
     <Grid Background="{DynamicResource AppWindowBackgroundBrush}"
-      ClipToBounds="True">
+          ClipToBounds="True">
 
-        <!-- Background image for all Key Mapping popups.
-         Uses ImageBrush so it does not affect SizeToContent window height. -->
+        <!-- Background image for all Key Mapping popups -->
         <Border IsHitTestVisible="False">
             <Border.Background>
                 <ImageBrush ImageSource="/Assets/background-window-keymapping.jpg"
-                        Stretch="UniformToFill"
-                        AlignmentX="Center"
-                        AlignmentY="Center"/>
+                            Stretch="UniformToFill"
+                            AlignmentX="Center"
+                            AlignmentY="Center"/>
             </Border.Background>
         </Border>
 
-        <!-- Fade layer. Increase opacity to hide more of the image. -->
+        <!-- Background fade -->
         <Border Background="{DynamicResource AppWindowBackgroundBrush}"
-            Opacity="0.92"
-            IsHitTestVisible="False"/>
+                Opacity="0.92"
+                IsHitTestVisible="False"/>
 
         <Grid Margin="26">
             <Grid.RowDefinitions>
@@ -41,10 +40,11 @@
                        Text="{Binding TitleText}"
                        Style="{StaticResource DialogTitleTextBlockStyle}"/>
 
+            <!-- Keyboard key section -->
             <ContentControl Grid.Row="1"
-                    Style="{StaticResource DialogCardStyle}"
-                    Padding="16"
-                    Margin="0,0,0,12">
+                            Style="{StaticResource DialogCardStyle}"
+                            Padding="16"
+                            Margin="0,0,0,12">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -84,116 +84,163 @@
                 </Grid>
             </ContentControl>
 
+            <!-- DX Input section -->
             <ContentControl Grid.Row="2"
-                    Style="{StaticResource DialogCardStyle}"
-                    Padding="16">
-                    <Grid>
+                            Style="{StaticResource DialogCardStyle}"
+                            Padding="16">
+                <Grid>
+                    <!-- Grid for the entire DX card: title, heading row and every input row
+                         Columns: 0 = Assigned Button | 1 = State | 2 = Trigger | 3 = Clear -->
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="140"/>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="50"/>
+                    </Grid.ColumnDefinitions>
+
                     <Grid.RowDefinitions>
+                        <!-- 0: title -->
                         <RowDefinition Height="Auto"/>
+                        <!-- 1: column headings -->
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
+                        <!-- 2: input rows -->
+                        <RowDefinition Height="Auto" MinHeight="88"/>
+                        <!-- 3: DX conflict warning -->
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0"
+                               Grid.ColumnSpan="4"
                                Text="DX Input"
                                Style="{StaticResource DialogSectionLabelStyle}"/>
 
-                    <Grid Grid.Row="1">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
+                    <!-- Column headings (row 1 of the same Grid) -->
+                    <TextBlock Grid.Row="1"
+                               Grid.Column="0"
+                               Margin="0,0,0,6"
+                               Text="Assigned button"
+                               Style="{StaticResource DialogFieldLabelStyle}"/>
 
-                        <TextBlock Grid.Column="0"
-                                   Text="Assigned DX:"
-                                   Style="{StaticResource DialogFieldLabelStyle}"/>
+                    <TextBlock Grid.Row="1"
+                               Grid.Column="1"
+                               Margin="0,0,0,6"
+                               Text="State"
+                               Style="{StaticResource DialogFieldLabelStyle}"/>
 
-                        <TextBlock Grid.Column="1"
-                                   Text="{Binding DxAssignmentText}"
-                                   Style="{StaticResource DialogAssignmentValueStyle}"/>
+                    <TextBlock Grid.Row="1"
+                               Grid.Column="2"
+                               Margin="0,0,0,6"
+                               Text="Trigger"
+                               Style="{StaticResource DialogFieldLabelStyle}"/>
 
-                        <Button Grid.Column="2"
-                                Width="96"
-                                Content="Clear DX"
-                                Command="{Binding ClearDxCommand}"/>
-                    </Grid>
+                    <TextBlock Grid.Row="1"
+                               Grid.Column="3"
+                               Margin="0,0,0,6"
+                               HorizontalAlignment="Center"
+                               Text="Clear"
+                               Style="{StaticResource DialogFieldLabelStyle}"/>
 
-                    <Grid Grid.Row="2"
-                          Margin="0,16,0,0">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="10"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
+                    <!-- Input rows (row 2 of the same Grid) -->
 
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
+                    <!-- Column 0: physical DX button or POV direction -->
+                    <ItemsControl Grid.Row="2"
+                                  Grid.Column="0"
+                                  ItemsSource="{Binding DxInputRows}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Height="44"
+                                        BorderBrush="{DynamicResource AppDialogCardBorderBrush}"
+                                        BorderThickness="0,1,0,0">
+                                    <TextBlock Text="{Binding InputText}"
+                                               Style="{StaticResource DialogAssignmentValueStyle}"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,10,0"/>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
 
-                        <TextBlock Grid.Row="0"
-                                   Grid.Column="0"
-                                   Text="Shift State:"
-                                   Style="{StaticResource DialogOptionLabelStyle}"
-                                   Margin="0,0,14,0"/>
+                    <!-- Column 1: Shift state for this row -->
+                    <ItemsControl Grid.Row="2"
+                                  Grid.Column="1"
+                                  ItemsSource="{Binding DxInputRows}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Height="44"
+                                        BorderBrush="{DynamicResource AppDialogCardBorderBrush}"
+                                        BorderThickness="0,1,0,0">
+                                    <ComboBox Width="120"
+                                              HorizontalAlignment="Left"
+                                              VerticalAlignment="Center"
+                                              ItemsSource="{Binding ShiftOptions}"
+                                              SelectedItem="{Binding ShiftState, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEnabled="{Binding IsShiftSelectionEnabled}"/>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
 
-                        <!-- The ViewModel controls the selection. Each RadioButton
-                             has a separate parent to prevent WPF's automatic
-                             grouping from changing the other button's state. -->
-                        <StackPanel Grid.Row="0"
-                                    Grid.Column="1"
-                                    Orientation="Horizontal"
-                                    VerticalAlignment="Center">
-                            <Border Margin="0,0,18,0">
-                                <RadioButton Content="Unshifted"
-                                             IsChecked="{Binding IsUnshifted, Mode=TwoWay}"
-                                             IsEnabled="{Binding IsDxOptionSelectionEnabled}"
-                                             VerticalAlignment="Center"/>
-                            </Border>
+                    <!-- Column 2: Press or Release for this row -->
+                    <ItemsControl Grid.Row="2"
+                                  Grid.Column="2"
+                                  ItemsSource="{Binding DxInputRows}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Height="44"
+                                        BorderBrush="{DynamicResource AppDialogCardBorderBrush}"
+                                        BorderThickness="0,1,0,0">
+                                    <ComboBox Width="100"
+                                              HorizontalAlignment="Left"
+                                              VerticalAlignment="Center"
+                                              ItemsSource="{Binding TriggerOptions}"
+                                              SelectedItem="{Binding Trigger, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEnabled="{Binding IsTriggerSelectionEnabled}"/>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
 
-                            <Border>
-                                <RadioButton Content="Shifted"
-                                             IsChecked="{Binding IsShifted, Mode=TwoWay}"
-                                             IsEnabled="{Binding IsDxOptionSelectionEnabled}"
-                                             VerticalAlignment="Center"/>
-                            </Border>
-                        </StackPanel>
+                    <!-- Column 3: Individual row removal button -->
+                    <ItemsControl Grid.Row="2"
+                                  Grid.Column="3"
+                                  ItemsSource="{Binding DxInputRows}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Height="44"
+                                        BorderBrush="{DynamicResource AppDialogCardBorderBrush}"
+                                        BorderThickness="0,1,0,0">
+                                    <Button Width="28"
+                                            Height="28"
+                                            Padding="0"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            HorizontalContentAlignment="Center"
+                                            VerticalContentAlignment="Center"
+                                            Visibility="{Binding ClearVisibility}"
+                                            Command="{Binding ClearCommand}">
+                                        <Path Width="10"
+                                              Height="10"
+                                              Stroke="{DynamicResource AppForegroundBrush}"
+                                              StrokeThickness="1.5"
+                                              StrokeStartLineCap="Round"
+                                              StrokeEndLineCap="Round"
+                                              Data="M0,0 L10,10 M10,0 L0,10"/>
+                                    </Button>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
 
-                        <TextBlock Grid.Row="2"
-                                   Grid.Column="0"
-                                   Text="Trigger:"
-                                   Style="{StaticResource DialogOptionLabelStyle}"
-                                   Margin="0,0,14,0"/>
-
-                        <StackPanel Grid.Row="2"
-                                    Grid.Column="1"
-                                    Orientation="Horizontal"
-                                    VerticalAlignment="Center">
-                            <Border Margin="0,0,18,0">
-                                <RadioButton Content="Press"
-                                             IsChecked="{Binding IsOnPress, Mode=TwoWay}"
-                                             IsEnabled="{Binding IsDxOptionSelectionEnabled}"
-                                             VerticalAlignment="Center"/>
-                            </Border>
-
-                            <Border>
-                                <RadioButton Content="Release"
-                                             IsChecked="{Binding IsOnRelease, Mode=TwoWay}"
-                                             IsEnabled="{Binding IsDxOptionSelectionEnabled}"
-                                             VerticalAlignment="Center"/>
-                            </Border>
-                        </StackPanel>
-                    </Grid>
-
+                    <!-- DX conflict warning -->
                     <TextBlock Grid.Row="3"
+                               Grid.ColumnSpan="4"
                                Text="{Binding DxConflictText}"
                                Margin="0,14,0,0"
                                Style="{StaticResource DialogConditionalWarningTextBlockStyle}"/>
                 </Grid>
             </ContentControl>
 
+            <!-- Dialog actions -->
             <StackPanel Grid.Row="4"
                         Orientation="Horizontal"
                         HorizontalAlignment="Right"
