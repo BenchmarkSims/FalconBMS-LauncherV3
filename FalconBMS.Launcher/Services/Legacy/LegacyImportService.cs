@@ -21,6 +21,9 @@ public sealed class LegacyImportService
     private readonly LegacyImportBackupService
         _backupService = new();
 
+    private readonly CallbackValidationService
+        _callbackValidator = new();
+
     private readonly LegacyAutoKeyImportService
         _autoKeyImporter = new();
 
@@ -351,7 +354,8 @@ public sealed class LegacyImportService
                     f16Result.AssignmentsImported;
 
                 missingCallbacks.UnionWith(
-                    f16Result.MissingCallbacks);
+                    f16Result.MissingCallbacks.Select(
+                        callback => $"F-16: {callback}"));
             }
 
             string f15AutoKeyPath =
@@ -370,7 +374,8 @@ public sealed class LegacyImportService
                     f15Result.AssignmentsImported;
 
                 missingCallbacks.UnionWith(
-                    f15Result.MissingCallbacks);
+                    f15Result.MissingCallbacks.Select(
+                        callback => $"F-15ABCD: {callback}"));
             }
 
             IReadOnlyList<StockDeviceSetupMatch> connectedMatches =
@@ -410,6 +415,18 @@ public sealed class LegacyImportService
                     skippedItems,
                     ref legacyDeviceCount,
                     ref stockFallbackCount);
+
+            // The v2 backup was already made in Import().
+            // Remove DX/POV assignments whose callback no longer exists in the
+            // current FULL key files, and list them in the import popup.
+            // Keyboard callbacks are already handled by LegacyAutoKeyImportService.
+            List<LegacyImportSkippedItem> obsoleteDeviceItems =
+                _callbackValidator.RemoveObsolete(
+                    catalogs,
+                    deviceProfiles);
+
+            skippedItems.AddRange(
+                obsoleteDeviceItems);
 
             bindingModel.DeviceProfiles.Clear();
 
@@ -493,7 +510,7 @@ public sealed class LegacyImportService
                 result.Warnings.Add(
                     $"{skippedCount} {controlText} skipped because " +
                     $"{(skippedCount == 1 ? "it is" : "they are")} not available " +
-                    "in the current BMS controls.");
+                    "in this new version BMS.");
             }
 
             return result;

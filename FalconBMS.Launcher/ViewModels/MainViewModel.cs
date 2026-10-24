@@ -37,6 +37,8 @@ public sealed class MainViewModel : ViewModelBase
     private readonly DeviceBindingProfileBuilderService _deviceBindingProfileBuilder = new();
     private readonly DeviceJsonReaderService _deviceJsonReader = new();
     private readonly LegacyImportService _legacyImport = new();
+    private readonly CallbackValidationService _callbackValidator = new();
+    private readonly LegacyImportBackupService _callbackBackup = new();
 
     // Tracks catalog-vs-JSON differences discovered during startup.
     // This is separate from ControlsViewModel.IsDirty because BMS adding or removing
@@ -782,14 +784,16 @@ public sealed class MainViewModel : ViewModelBase
     }
 
     private static void ShowLegacyImportCompleteMessage(
-        LegacyImportExecutionResult importResult)
+        LegacyImportExecutionResult importResult,
+        bool isCallbackCleanup = false)
     {
         Window? ownerWindow =
             Application.Current.MainWindow;
 
         var completeWindow =
             new LegacyImportCompleteWindow(
-                importResult);
+                importResult,
+                isCallbackCleanup);
 
         // During first-run v2-to-v3 import, this message can appear before MainWindow
         // has been shown. WPF does not allow assigning Owner to a window that has not
@@ -905,6 +909,140 @@ public sealed class MainViewModel : ViewModelBase
                     $"JSON read failure blocking output save: {message}");
             }
         }
+
+        // If a JSON file could not be read, the model may hold partial fallback
+        // data, so do not judge or clean anything this run.
+        if (!_jsonReadFailureBlocksOutputSave)
+            ValidateObsoleteCallbacks(install);
+    }
+
+    /// <summary>
+    /// After a BMS update, controls can disappear from the FULL key files.
+    /// This runs once per model load and follows these steps:
+    ///   1. Collect obsolete keyboard rows (reported by the JSON reader) and
+    ///      obsolete DX/POV assignments (found by the validator)
+    ///   2. Nothing obsolete -> return. No backup, no popup, no changes
+    ///   3. Back up the JSON/KEY/XML files into Launcher-Backups.
+    ///      If the backup fails, nothing is removed and saving is blocked.
+    ///   4. Remove the obsolete DX/POV assignments from the in-memory model.
+    ///      (Obsolete keyboard rows are already absent; the existing catalog
+    ///      sync rewrites the keyboard JSON without them.)
+    ///   5. Flag the existing save pipeline to write JSON + KEY + XML on close/launch
+    ///   6. Show the "controls removed" popup
+    /// </summary>
+    private void ValidateObsoleteCallbacks(BmsInstall install)
+    {
+        // Step 1: Collect
+        var obsolete = new List<LegacyImportSkippedItem>();
+
+        obsolete.AddRange(
+            _jsonKeyboardBindingReader.ObsoleteCallbacks);
+
+        obsolete.AddRange(
+            _callbackValidator.FindObsolete(
+                KeyCatalogs,
+                CurrentBindingModel.DeviceProfiles));
+
+        // Step 2: Nothing to do
+        if (obsolete.Count == 0)
+        {
+            DebugDiagnosticsService.Info(
+                "Obsolete callback check complete. Nothing found.");
+
+            return;
+        }
+
+        DebugDiagnosticsService.Warn(
+            $"Obsolete callbacks found | Count={obsolete.Count}");
+
+        // One log line per item so the log alone shows exactly what was removed
+        foreach (LegacyImportSkippedItem item in obsolete)
+        {
+            DebugDiagnosticsService.Warn(
+                $"Obsolete callback | Source=\"{item.SourceName}\" | Control=\"{item.ControlName}\"");
+        }
+
+        // Step 3: Back up before changing anything
+        string configDirectory =
+            Path.Combine(
+                install.BaseDir,
+                "User",
+                "Config");
+
+        LegacyImportBackupResult backup =
+            _callbackBackup.CreateJsonCleanupBackup(
+                configDirectory);
+
+        if (!backup.Succeeded)
+        {
+            string errorMessage =
+                "Some of your control assignments are no longer available in this version " +
+                "of BMS, but a backup of your files could not be created.\n\n" +
+                "Nothing was changed. Saving and launching are disabled for this session " +
+                "to protect your files.\n\n" +
+                backup.ErrorMessage;
+
+            DebugDiagnosticsService.Warn(
+                $"Obsolete callback cleanup canceled. Backup failed: {backup.ErrorMessage}");
+
+            // Reuse the existing "block saving" protection. The flag is reset at the
+            // start of the next model load, which will try the backup again.
+            _jsonReadFailureBlocksOutputSave = true;
+            CurrentBindingModel.HasJsonReadFailureBlockingSave = true;
+            CurrentBindingModel.JsonReadFailureMessages.Add(errorMessage);
+
+            // Show message below, so tell the existing JSON-read-failure
+            // warning not to show a second, differently worded dialog
+            _hasShownJsonReadFailureStartupWarning = true;
+
+            Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                MessageBox.Show(
+                    errorMessage,
+                    "Backup Failed",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                StatusText = "Backup failed. Saving is disabled for this session.";
+            }));
+
+            return;
+        }
+
+        // Step 4: Remove obsolete DX/POV assignments from memory
+        List<LegacyImportSkippedItem> removedDeviceItems =
+            _callbackValidator.RemoveObsolete(
+                KeyCatalogs,
+                CurrentBindingModel.DeviceProfiles);
+
+        if (removedDeviceItems.Count > 0)
+            _needsDeviceJsonSync = true;
+
+        // Step 5: The existing close/launch pipeline writes the cleaned files
+        _needsControlOutputSync = true;
+
+        DebugDiagnosticsService.Info(
+            $"Obsolete callback cleanup complete | Total={obsolete.Count} | " +
+            $"DeviceAssignmentsRemoved={removedDeviceItems.Count} | " +
+            $"Backup=\"{backup.BackupDirectory}\" | FilesBackedUp={backup.FilesCopied}");
+
+        // Step 6: Popup window, deferred to appear after the model finishes loading
+        var notification =
+            new LegacyImportExecutionResult
+            {
+                Succeeded = true,
+                BackupDirectory = backup.BackupDirectory,
+                BackupFilesCopied = backup.FilesCopied
+            };
+
+        notification.SkippedItems.AddRange(obsolete);
+
+        Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            ShowLegacyImportCompleteMessage(
+                notification,
+                isCallbackCleanup: true);
+        }));
     }
 
     private void LoadTheaterForSelectedInstall()

@@ -1,4 +1,5 @@
 ﻿using FalconBMS.Launcher.Models;
+using FalconBMS.Launcher.Models.Legacy;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -24,8 +25,15 @@ public sealed class JsonKeyboardBindingReaderService
 {
     private const string KeyComboCallbackName = "CommandsSetKeyCombo";
 
+    // Keyboard assignments the USER had made that no longer exist in the current
+    // FULL key files. Filled by Apply() on every read. MainViewModel shows these
+    // in the "controls removed" popup. Unmodified rows are not listed.
+    public List<LegacyImportSkippedItem> ObsoleteCallbacks { get; } = new();
+
     public bool Apply(string baseDir, BindingModel bindingModel)
     {
+        ObsoleteCallbacks.Clear();
+
         string actionId = DebugDiagnosticsService.CreateActionId("JSONREAD");
         DebugDiagnosticsService.Info($"Keyboard JSON read begin. | ActionId={actionId}");
 
@@ -55,7 +63,7 @@ public sealed class JsonKeyboardBindingReaderService
         return needsCatalogSync;
     }
 
-    private static bool ApplyProfile(
+    private bool ApplyProfile(
         string configDir,
         BindingModel bindingModel,
         string aircraftProfile,
@@ -243,6 +251,37 @@ public sealed class JsonKeyboardBindingReaderService
             if (bindingRow is null)
             {
                 missing++;
+
+                // Warn only when BOTH are true:
+                //   1. the user had assigned this row (is_modified), and
+                //   2. the callback is gone from the whole current FULL profile.
+                // Condition 2 matters because a callback that still exists in FULL
+                // but moved to a different line can also end up unmatched here.
+                bool callbackStillInFull =
+                    profile.Rows.Any(fullRow =>
+                        string.Equals(
+                            fullRow.CallbackName,
+                            callbackName,
+                            StringComparison.OrdinalIgnoreCase));
+
+                if (jsonRow.IsModified == true && !callbackStillInFull)
+                {
+                    string description =
+                        string.IsNullOrWhiteSpace(jsonRow.Description)
+                            ? ""
+                            : $" ({jsonRow.Description.Trim()})";
+
+                    ObsoleteCallbacks.Add(new LegacyImportSkippedItem
+                    {
+                        SourceName = "Keyboard",
+                        ControlName = $"{aircraftProfile}: {callbackName}{description}",
+                        Reason = "This control is no longer available in the current BMS key files."
+                    });
+
+                    DebugDiagnosticsService.Warn(
+                        $"Obsolete keyboard callback | Aircraft={aircraftProfile} | Callback={callbackName} | ActionId={actionId}");
+                }
+
                 continue;
             }
 

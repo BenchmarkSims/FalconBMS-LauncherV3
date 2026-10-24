@@ -13,6 +13,12 @@ public sealed class LegacyImportBackupService
     private const string BackupFolderPrefix =
         "V2-to-V3-Import";
 
+    // A pre-update backup folder is made when a BMS update removes controls
+    // the user had assigned. It's kept separate from the V2 import folder so
+    // the two kinds of backup are easy to tell apart.
+    private const string UpdateCleanupFolderPrefix =
+        "BMS-Update";
+
     private static readonly string[] BackupIncludePatterns =
     {
         "axismapping.dat",
@@ -103,6 +109,100 @@ public sealed class LegacyImportBackupService
             DebugDiagnosticsService.Exception(
                 ex,
                 "Legacy import backup failed.");
+
+            return LegacyImportBackupResult.Failed(
+                ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Creates a backup of the current Launcher control configuration
+    /// before obsolete callbacks are removed.
+    ///
+    /// Backs up keyboard and device JSON files, AUTO KEY files,
+    /// and device XML files to User\Config\Launcher-Backups\BMS-Update-[timestamp].
+    /// </summary>
+    public LegacyImportBackupResult CreateJsonCleanupBackup(
+        string configDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(configDirectory))
+        {
+            return LegacyImportBackupResult.Failed(
+                "The BMS control folder could not be found.");
+        }
+
+        string jsonDirectory =
+            Path.Combine(
+                configDirectory,
+                "JSON");
+
+        try
+        {
+            Directory.CreateDirectory(jsonDirectory);
+            // Launcher JSON snapshots in User\Config\JSON.
+            // KeyboardBindings*.json also matches the old unsuffixed
+            // KeyboardBindings.json that the keyboard reader falls back to.
+            string[] jsonPatterns =
+            {
+                "KeyboardBindings*.json",
+                "DeviceBindings_*.json"
+            };
+
+            // Generated BMS files in User\Config
+            string[] outputPatterns =
+            {
+                "BMS - Auto*.key",
+                "Setup.v100.*.xml"
+            };
+
+            List<string> sourceFiles =
+                jsonPatterns
+                    .SelectMany(pattern =>
+                        Directory.GetFiles(
+                            jsonDirectory,
+                            pattern,
+                            SearchOption.TopDirectoryOnly))
+                    .Concat(
+                        outputPatterns
+                            .SelectMany(pattern =>
+                                Directory.GetFiles(
+                                    configDirectory,
+                                    pattern,
+                                    SearchOption.TopDirectoryOnly)))
+                    .Distinct(
+                        StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(path =>
+                        Path.GetFileName(path),
+                        StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+            string backupDirectory =
+                CreateBackupDirectory(
+                    configDirectory,
+                    UpdateCleanupFolderPrefix);
+
+            foreach (string sourcePath in sourceFiles)
+            {
+                File.Copy(
+                    sourcePath,
+                    Path.Combine(
+                        backupDirectory,
+                        Path.GetFileName(sourcePath)),
+                    overwrite: false);
+            }
+
+            DebugDiagnosticsService.Info(
+                $"BMS update backup created. FilesCopied={sourceFiles.Count} Path={backupDirectory}");
+
+            return LegacyImportBackupResult.Success(
+                backupDirectory,
+                sourceFiles.Count);
+        }
+        catch (Exception ex)
+        {
+            DebugDiagnosticsService.Exception(
+                ex,
+                "BMS update cleanup backup failed.");
 
             return LegacyImportBackupResult.Failed(
                 ex.Message);
@@ -209,8 +309,11 @@ public sealed class LegacyImportBackupService
         }
     }
 
+    // folderPrefix defaults to the V2 import prefix, so the two existing
+    // callers (CreateBackup and CreateBackupForFiles) behave same as before
     private static string CreateBackupDirectory(
-        string configDirectory)
+        string configDirectory,
+        string folderPrefix = BackupFolderPrefix)
     {
         string timestamp =
             DateTime.Now.ToString(
@@ -220,7 +323,7 @@ public sealed class LegacyImportBackupService
             Path.Combine(
                 configDirectory,
                 BackupParentFolderName,
-                $"{BackupFolderPrefix}-{timestamp}");
+                $"{folderPrefix}-{timestamp}");
 
         Directory.CreateDirectory(
             backupDirectory);

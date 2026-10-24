@@ -10,7 +10,8 @@ namespace FalconBMS.Launcher.Views;
 public partial class LegacyImportCompleteWindow : Window
 {
     public LegacyImportCompleteWindow(
-        LegacyImportExecutionResult importResult)
+        LegacyImportExecutionResult importResult,
+        bool isCallbackCleanup = false)
     {
         InitializeComponent();
 
@@ -18,6 +19,11 @@ public partial class LegacyImportCompleteWindow : Window
         {
             ConfigureFailureText(
                 importResult);
+        }
+        else if (isCallbackCleanup)
+        {
+            // Normal startup after a BMS update removes controls (not a v2 import)
+            ConfigureCallbackCleanupText();
         }
 
         BackupFolderRun.Text =
@@ -51,6 +57,26 @@ public partial class LegacyImportCompleteWindow : Window
             MinHeight =
                 440;
         }
+    }
+
+    private void ConfigureCallbackCleanupText()
+    {
+        Title =
+            "Control Assignments Updated";
+
+        HeaderTextBlock.Text =
+            "Some controls were removed";
+
+        IntroTextBlock.Text =
+            "The current version of Falcon BMS no longer includes some controls " +
+            "you had mapped. Those assignments were removed. " +
+            "All your other mappings were kept.";
+
+        BackupIntroRun.Text =
+            "A backup of your previous setup was created in your BMS installation folder:";
+
+        ImportMessagesHeaderTextBlock.Text =
+            "Removed Assignments";
     }
 
     private void ConfigureFailureText(
