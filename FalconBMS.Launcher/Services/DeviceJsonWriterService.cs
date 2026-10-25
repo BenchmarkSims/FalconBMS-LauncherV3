@@ -259,10 +259,17 @@ public sealed class DeviceJsonWriterService
         Indent(sb, indentLevel);
         sb.AppendLine("\"button_bindings\": [");
 
-        for (int i = 0; i < buttonBindings.Count; i++)
+        // Sort JSON enties by DX button first,
+        // then by assignment slot (shift/trigger)
+        List<DeviceButtonBinding> sortedBindings = buttonBindings
+            .OrderBy(button => button.ButtonIndex)
+            .ThenBy(button => button.AssignmentIndex)
+            .ToList();
+
+        for (int i = 0; i < sortedBindings.Count; i++)
         {
-            DeviceButtonBinding button = buttonBindings[i];
-            bool isLast = i == buttonBindings.Count - 1;
+            DeviceButtonBinding button = sortedBindings[i];
+            bool isLast = i == sortedBindings.Count - 1;
 
             Indent(sb, itemIndentLevel);
             sb.AppendLine("{");
