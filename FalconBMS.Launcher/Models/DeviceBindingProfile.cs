@@ -27,10 +27,16 @@ public sealed class DeviceBindingProfile
     public Guid? LastSeenInstanceGuid { get; init; }
 
     /// <summary>
-    /// True when this saved profile was matched to a currently discovered DirectInput device.
-    /// False means the profile came from JSON but the physical device is offline/missing.
+    /// True when this device can receive DirectInput and be included in BMS outputs.
+    /// False when the device is offline or suppressed.
     /// </summary>
-    public bool IsConnected { get; init; } = true;
+    public bool IsConnected { get; set; } = true;
+
+    /// <summary>
+    /// Runtime-only flag identifying a device disabled by DeviceSuppress.txt.
+    /// Used to display "Suppressed".
+    /// </summary>
+    public bool IsSuppressed { get; set; }
 
     /// <summary>
     /// DirectInput product GUID used to derive PID/VID for durable device identity.

@@ -12,6 +12,44 @@ public sealed class LegacyDeviceSortingWriterService
 {
     private static readonly Regex OldNameSanitizeRx =
         new(@"[^A-Za-z0-9\~\`\[\]\{\}\-_\=\'\x20]", RegexOptions.Compiled);
+    public static bool NeedsSync(
+        string baseDir,
+        IReadOnlyList<DeviceBindingProfile> deviceProfiles)
+    {
+        string path = Path.Combine(
+            baseDir,
+            "User",
+            "Config",
+            "DeviceSorting.txt");
+
+        try
+        {
+            if (!File.Exists(path))
+                return true;
+
+            IReadOnlyList<DeviceBindingProfile> connectedProfiles =
+                deviceProfiles
+                    .Where(profile => profile.IsConnected)
+                    .ToList();
+
+            // Compare against the exact content the existing writer generates
+            string expectedContent = BuildContent(connectedProfiles);
+            string existingContent = File.ReadAllText(path);
+
+            return !string.Equals(
+                existingContent,
+                expectedContent,
+                StringComparison.Ordinal);
+        }
+        catch (Exception ex)
+        {
+            DebugDiagnosticsService.Exception(
+                ex,
+                $"DeviceSorting.txt sync check failed: {path}");
+
+            return true;
+        }
+    }
 
     public void Write(string baseDir, IReadOnlyList<DeviceBindingProfile> deviceProfiles)
     {

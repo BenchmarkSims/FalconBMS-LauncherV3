@@ -672,7 +672,9 @@ public sealed class MainViewModel : ViewModelBase
     {
         string[] currentDevices =
             CurrentBindingModel.DeviceProfiles
-                .Where(device => device.IsConnected)
+                .Where(device =>
+                    device.IsConnected ||
+                    device.IsSuppressed)
                 .Select(device =>
                     $"{device.DurableDeviceKey}|{device.InstanceGuid:D}")
                 .OrderBy(
@@ -872,6 +874,32 @@ public sealed class MainViewModel : ViewModelBase
         {
             CurrentBindingModel.DeviceProfiles.Add(
                 deviceProfile);
+        }
+
+        // Apply DeviceSuppress.txt after loading the device profiles.
+        // Keep all saved assignments, but treat suppressed devices as offline.
+        HashSet<Guid> suppressedGuids =
+            DeviceSuppressListService.Load(install.BaseDir);
+
+        foreach (DeviceBindingProfile deviceProfile
+                 in CurrentBindingModel.DeviceProfiles)
+        {
+            // A physically missing device remains Offline
+            if (!deviceProfile.IsConnected)
+                continue;
+
+            // Matches either the Instance GUID or Product GUID
+            if (!suppressedGuids.Contains(deviceProfile.InstanceGuid) &&
+                !suppressedGuids.Contains(deviceProfile.ProductGuid))
+            {
+                continue;
+            }
+
+            deviceProfile.IsConnected = false;
+            deviceProfile.IsSuppressed = true;
+
+            DebugDiagnosticsService.Info(
+                $"Device suppressed by DeviceSuppress.txt | Device=\"{deviceProfile.ProductName}\" | ProductGuid={deviceProfile.ProductGuid:B} | InstanceGuid={deviceProfile.InstanceGuid:B}");
         }
 
         _needsDeviceJsonSync =
@@ -1171,7 +1199,15 @@ public sealed class MainViewModel : ViewModelBase
         bool hasUserBindingChanges = ControlsViewModel?.IsDirty == true;
         bool needsKeyboardJsonCatalogSync = _needsKeyboardJsonCatalogSync;
         bool needsDeviceJsonSync = _needsDeviceJsonSync;
-        bool needsControlOutputSync = _needsControlOutputSync;
+
+        // Regenerate BMS outputs if DeviceSorting.txt no longer matches
+        // the connected devices
+        bool needsControlOutputSync =
+            _needsControlOutputSync ||
+            (!NoControlsMode &&
+             LegacyDeviceSortingWriterService.NeedsSync(
+                 SelectedInstall.BaseDir,
+                 CurrentBindingModel.DeviceProfiles));
 
         if (IsOutputSaveBlockedByJsonReadFailure())
         {

@@ -1992,9 +1992,13 @@ public sealed class ControlsViewModel : ViewModelBase
             else
                 displayName = deviceProfile.DurableDeviceKey;
 
-            return deviceProfile.IsConnected
-                ? displayName
-                : displayName + " — Offline";
+            if (deviceProfile.IsConnected)
+                return displayName;
+
+            return displayName +
+                (deviceProfile.IsSuppressed
+                    ? " — Suppressed"
+                    : " — Offline");
         }
     }
 

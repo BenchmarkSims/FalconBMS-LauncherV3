@@ -481,7 +481,9 @@ public partial class ControlsView : UserControl
 
         panel.Children.Add(new TextBlock
         {
-            Text = "Offline",
+            Text = deviceProfile.IsSuppressed
+                ? "Suppressed"
+                : "Offline",
             FontStyle = FontStyles.Italic,
         });
 
