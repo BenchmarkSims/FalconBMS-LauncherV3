@@ -269,7 +269,7 @@ public sealed class JsonKeyboardBindingReaderService
                     string description =
                         string.IsNullOrWhiteSpace(jsonRow.Description)
                             ? ""
-                            : $" ({jsonRow.Description.Trim()})";
+                            : $" ({jsonRow.Description?.Trim()})";
 
                     ObsoleteCallbacks.Add(new LegacyImportSkippedItem
                     {
