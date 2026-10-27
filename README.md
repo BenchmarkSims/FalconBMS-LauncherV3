@@ -13,6 +13,7 @@ This Launcher is compatible with both Windows and Linux.
   - [Checking for Updates](#checking-updates)
   - [First Run on a New Install](#fresh-install)
   - [Upgrading From an Older Version](#v2-import)
+  - [After BMS Updates](#after-bms-updates)
 - [Assigning Controls](#assigning-controls)
   - [Mapping a Key or Button](#mapping-key-button)
   - [Mapping an Axis](#mapping-axis)
@@ -56,7 +57,7 @@ Launcher v3 uses a new control file system that is not compatible with older ver
 After updating from an older version of Falcon BMS, Launcher v3 will check for existing Launcher v2 KEY and XML control files. If found, it will automatically perform a one-time conversion into the new Launcher v3 format.
 
 A backup of your older Launcher v2 files will automatically be created in:
-\User\Config\Launcher-Backups
+`User\Config\Launcher-Backups`.
 
 When the conversion is complete, the Launcher will start normally and allow you to continue setting up your controls.
 
@@ -66,6 +67,18 @@ If any mappings could not be converted, a message will show which controls could
 
 Note: Manually modifying the KEY or XML files will cause the Launcher to become out-of-sync with changes you've made.
 
+### After BMS Updates
+
+Following future Falcon BMS updates, this new Launcher checks your existing keyboard and device assignments against the controls available in the updated BMS version.
+
+If any controls are no longer supported, the Launcher will:
+
+- Create a backup of your existing control files
+- Remove obsolete assignments
+- Display a message identifying which assignments were removed
+
+Backups are saved in `User\Config\Launcher-Backups`.
+
 <a id="assigning-controls"></a>
 ## Assigning Controls
 
@@ -73,13 +86,12 @@ The Launcher comes with a few pre-configured setups for popular devices, but you
 
 ![Controls tab](.github/images/controls-tab.png)
 
-The Controls tab is divided into four panels that work together to help you set up and customize your controls.
-- Top panel: Aircraft profile selection, text filtering, import/export
-- Category panel: Filters the Mapping table to only show controls within the selected category
-- Last input: Displays the last key press, button press, POV hat direction, or axis movement
-- Mapping panel: Used to view and modify your keyboard and device controls
+The Controls tab is divided into three panels:
+- Top Panel: Select aircraft profiles, import/export control settings, and view the last detected input.
+- Filtering Panel: Filter the Mapping table by text, category, or both to quickly find specific controls. Use the Clear button to reset your filters.
+- Mapping Panel: View and modify keyboard, DirectX button, and POV assignments.
 
-Clicking any key or button will highlight mapped input in the table
+Pressing a keyboard key or device button will highlight its assigned control in the Mapping table.
 
 <a id="mapping-key-button"></a>
 ### Mapping a Key or Button
@@ -92,10 +104,9 @@ When the popup window appears, simply press a key or button to assign it to this
 
 If the key or button is already used elsewhere, a warning message will display. You can still reassign the input by clicking the 'Save' button.
 
-For DX inputs, you can assign a button to a shifted state or have the assigned control activate when the button is released rather than pressed.
-
-- First select "SHIFTED" and/or "RELEASE", then press a device's button
-- "SHIFTED" and/or "RELEASE" will display in the Assigned DX line to let you know when either option is set
+For DX inputs, each assigned button is displayed on its own row, along with its Shift and Trigger settings.
+- You can assign the Shift or Trigger state before or after pressing a button
+- Click the "X" button on a row to unassign only that input
 
 <a id="mapping-axis"></a>
 ### Mapping an Axis
@@ -259,6 +270,8 @@ When the Launcher loads, keyboard and device bindings are resolved independently
 13. If no stock XML exists for that device, build an empty device profile
 14. Retain saved profiles for devices that are currently offline
 15. Build the complete in-memory binding model
+16. Validate existing keyboard and device assignments against the current FULL key files
+17. If obsolete assignments are found, back up the control files, remove the obsolete assignments, and notify the user
 
 
 ### Save and Launch Flow
