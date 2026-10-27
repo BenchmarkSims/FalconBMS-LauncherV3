@@ -52,9 +52,14 @@ public sealed class LegacyDeviceXmlImportService
             if (!match.Success)
                 continue;
 
-            Guid.TryParse(
-                match.Groups["instanceGuid"].Value,
-                out Guid instanceGuid);
+            // Ignore filenames that do not contain a valid device GUID
+            // Ex: Setup.v100.X52 Pro  {A9157640-B283-11EE-8001-444553540000} - Copy.xml
+            if (!Guid.TryParse(
+                    match.Groups["instanceGuid"].Value,
+                    out Guid instanceGuid))
+            {
+                continue;
+            }
 
             results.Add(
                 new LegacyDeviceXmlFile

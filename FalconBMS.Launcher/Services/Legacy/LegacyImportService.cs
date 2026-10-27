@@ -213,11 +213,9 @@ public sealed class LegacyImportService
                 Path.Combine(
                     configDirectory,
                     "DeviceSorting.txt")) ||
-            Directory.EnumerateFiles(
-                    configDirectory,
-                    "Setup.v100.*.xml",
-                    SearchOption.TopDirectoryOnly)
-                .Any();
+            _deviceXmlImporter
+                .FindLegacyXmlFiles(configDirectory)
+                .Count > 0;
     }
 
     public LegacyImportScanResult Scan(
