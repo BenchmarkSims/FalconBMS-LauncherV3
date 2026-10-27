@@ -130,7 +130,7 @@ public sealed class CallbackValidationService
         // Group removed assignments by device and aircraft profile
         return new LegacyImportSkippedItem
         {
-            SourceName = $"{device.ProductName} ({aircraft.AircraftProfile})",
+            SourceName = $"{device.ProductName} ({aircraft.AircraftProfile} profile)",
             ControlName = $"{callbackName} - {controlLabel}",
             Reason = ObsoleteReason
         };
