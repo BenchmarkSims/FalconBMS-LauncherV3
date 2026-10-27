@@ -272,6 +272,7 @@ public partial class ControlsView : UserControl
             var column = new DataGridTemplateColumn
             {
                 Header = GetDeviceColumnHeader(deviceProfile),
+                HeaderStyle = TryFindResource("ControlsTableDeviceColumnHeaderStyle") as Style,
                 CellTemplate = CreateDeviceCellTemplate(deviceProfile.DurableDeviceKey),
                 Width = new DataGridLength(140),
                 MinWidth = 140,
@@ -466,25 +467,32 @@ public partial class ControlsView : UserControl
     {
         string displayName = GetDeviceDisplayName(deviceProfile);
 
+        var deviceName = new TextBlock
+        {
+            Text = displayName,
+            TextWrapping = TextWrapping.Wrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+            LineHeight = 18,
+            MaxHeight = 36
+        };
+
         if (deviceProfile.IsConnected)
-            return displayName;
+            return deviceName;
 
         var panel = new StackPanel
         {
             Orientation = Orientation.Vertical
         };
 
-        panel.Children.Add(new TextBlock
-        {
-            Text = displayName
-        });
+        panel.Children.Add(deviceName);
 
         panel.Children.Add(new TextBlock
         {
             Text = deviceProfile.IsSuppressed
                 ? "Suppressed"
                 : "Offline",
-            FontStyle = FontStyles.Italic,
+            FontStyle = FontStyles.Italic
         });
 
         return panel;

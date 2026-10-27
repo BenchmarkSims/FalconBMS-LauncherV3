@@ -124,10 +124,50 @@ public sealed class ControlsViewModel : ViewModelBase
     public bool IsUnassignedKeysCategory =>
         string.Equals(SelectedCategory, UnassignedKeysLabel, StringComparison.OrdinalIgnoreCase);
 
+    public string ResultsCountText
+    {
+        get
+        {
+            if (IsUnassignedKeysCategory)
+                return $"Showing {Rows.Count:N0} results";
+
+            int visible = Rows.Count(row =>
+                row.IsAxisRow ||
+                row.IsAxisPairRow ||
+                row.SourceRow?.IsCallback == true);
+
+            int total = _allRows.Count(row =>
+                row.IsAxisRow ||
+                row.IsAxisPairRow ||
+                row.SourceRow?.IsCallback == true);
+
+            return $"Showing {visible:N0} of {total:N0} Mappings";
+        }
+    }
+
+    public string ClearFilterButtonText
+    {
+        get
+        {
+            bool hasTextFilter =
+                !string.IsNullOrWhiteSpace(FilterText);
+
+            bool hasCategoryFilter =
+                !string.Equals(
+                    SelectedCategory,
+                    AllActionsLabel,
+                    StringComparison.OrdinalIgnoreCase);
+
+            return hasTextFilter && hasCategoryFilter
+                ? "Clear Filters"
+                : "Clear Filter";
+        }
+    }
+
     public string HelperText =>
         IsUnassignedKeysCategory
             ? $"These {Rows.Count} keyboard combinations are not currently assigned to this aircraft."
-            : "Double-click a row to map that control to a key, button, axis, or POV hat. Press a key, button, or hat direction to jump to its current assignment. Italicized rows are not editable";
+            : "Double-click a row to map that control to a key, button, axis, or POV hat. Italicized rows are not editable.";
 
     public RelayCommand ClearFilterCommand { get; }
     public RelayCommand ImportBindingsCommand { get; }
@@ -135,7 +175,14 @@ public sealed class ControlsViewModel : ViewModelBase
 
     public ControlsViewModel()
     {
-        ClearFilterCommand = new RelayCommand(ClearFilters, () => true);
+        ClearFilterCommand = new RelayCommand(
+            ClearFilters,
+            () => !string.IsNullOrWhiteSpace(FilterText) ||
+                  !string.Equals(
+                      SelectedCategory,
+                      AllActionsLabel,
+                      StringComparison.OrdinalIgnoreCase));
+
         ImportBindingsCommand = new RelayCommand(ImportBindings, CanImportOrExportBindings);
         ExportBindingsCommand = new RelayCommand(ExportBindings, CanImportOrExportBindings);
     }
@@ -780,8 +827,13 @@ public sealed class ControlsViewModel : ViewModelBase
         if (IsUnassignedKeysCategory)
         {
             RebuildUnassignedKeyRows();
+
             OnPropertyChanged(nameof(SummaryText));
+            OnPropertyChanged(nameof(ResultsCountText));
+            OnPropertyChanged(nameof(ClearFilterButtonText));
             OnPropertyChanged(nameof(HelperText));
+
+            ClearFilterCommand.RaiseCanExecuteChanged();
             return;
         }
 
@@ -865,6 +917,10 @@ public sealed class ControlsViewModel : ViewModelBase
                 : null;
 
         OnPropertyChanged(nameof(SummaryText));
+        OnPropertyChanged(nameof(ResultsCountText));
+        OnPropertyChanged(nameof(ClearFilterButtonText));
+
+        ClearFilterCommand.RaiseCanExecuteChanged();
     }
 
     private void RebuildUnassignedKeyRows()

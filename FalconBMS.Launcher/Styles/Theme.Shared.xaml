@@ -907,6 +907,35 @@
         <Setter Property="Margin" Value="0,0,0,6"/>
     </Style>
 
+    <!-- Results heading -->
+    <Style x:Key="ControlsSidebarResultHeaderTextBlockStyle"
+           TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource AppForegroundBrush}"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeMedium}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+
+    <!-- Text filter placeholder -->
+    <Style x:Key="ControlsFilterPlaceholderTextBlockStyle"
+           TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource AppMutedForegroundBrush}"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeSmall}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="IsHitTestVisible" Value="False"/>
+        <Setter Property="Visibility" Value="Collapsed"/>
+
+        <Style.Triggers>
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding FilterText}" Value=""/>
+                    <Condition Binding="{Binding IsKeyboardFocusWithin, ElementName=FilterTextBox}"
+                               Value="False"/>
+                </MultiDataTrigger.Conditions>
+                <Setter Property="Visibility" Value="Visible"/>
+            </MultiDataTrigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- Controls view category navigation list -->
     <Style x:Key="ControlsNavListBoxStyle"
            TargetType="ListBox">
@@ -975,6 +1004,13 @@
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="HorizontalContentAlignment" Value="Left"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+
+    <!-- Stretch device titles within their column headers -->
+    <Style x:Key="ControlsTableDeviceColumnHeaderStyle"
+           TargetType="DataGridColumnHeader"
+           BasedOn="{StaticResource ControlsTableColumnHeaderStyle}">
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
     </Style>
 
     <Style x:Key="ControlsTableRowStyle" TargetType="DataGridRow">

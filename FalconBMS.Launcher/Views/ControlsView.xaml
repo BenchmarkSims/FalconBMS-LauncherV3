@@ -9,141 +9,183 @@
 
     <Grid Background="{DynamicResource AppWindowBackgroundBrush}"
           Style="{StaticResource ViewContentRootStyle}">
+
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0"
-                Style="{StaticResource DashboardCardStyle}"
-                Padding="12"
-                Margin="0,0,0,12">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="8"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
+        <!-- Profile and Last Input -->
+        <Grid Grid.Row="0"
+              Margin="0,0,0,12">
 
-                <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="320"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0"
+                    Style="{StaticResource DashboardCardStyle}"
+                    Padding="12,8">
+
+                <StackPanel>
+
+                    <StackPanel Orientation="Horizontal">
+
+                        <TextBlock Text="Profile"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0"/>
+
+                        <ComboBox Width="180"
+                                  ItemsSource="{Binding Profiles}"
+                                  SelectedItem="{Binding SelectedProfile, Mode=TwoWay}"
+                                  DisplayMemberPath="AircraftProfile"/>
+
+                        <Button Content="Import Controls"
+                                Width="130"
+                                Command="{Binding ImportBindingsCommand}"
+                                Margin="24,0,8,0"/>
+
+                        <Button Content="Export Controls"
+                                Width="130"
+                                Command="{Binding ExportBindingsCommand}"/>
+
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding HelperText}"
+                               Style="{StaticResource MutedTextBlockStyle}"
+                               FontSize="{StaticResource FontSizeSmall}"
+                               TextWrapping="Wrap"
+                               Margin="0,8,0,0"/>
+
+                </StackPanel>
+            </Border>
+
+            <!-- Last Input -->
+            <Border Grid.Column="2"
+                    Style="{StaticResource DashboardCardStyle}"
+                    Padding="12,8">
+
+                <Grid VerticalAlignment="Center">
+
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <StackPanel Grid.Column="0"
-                Orientation="Horizontal">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-                        <TextBlock Text="Profile"
-                   VerticalAlignment="Center"
-                   Margin="0,0,8,0"/>
+                    <TextBlock Grid.Row="0"
+                               Grid.Column="0"
+                               Text="Last Input"
+                               VerticalAlignment="Center"/>
 
-                        <ComboBox Width="180"
-                  ItemsSource="{Binding Profiles}"
-                  SelectedItem="{Binding SelectedProfile, Mode=TwoWay}"
-                  DisplayMemberPath="AircraftProfile"
-                  Margin="0,0,16,0"/>
+                    <TextBlock x:Name="LastInputDeviceText"
+                               Grid.Row="0"
+                               Grid.Column="1"
+                               Text="No input detected"
+                               Style="{StaticResource MutedTextBlockStyle}"
+                               FontSize="{StaticResource FontSizeSmall}"
+                               HorizontalAlignment="Right"
+                               VerticalAlignment="Center"
+                               TextAlignment="Right"
+                               TextWrapping="Wrap"
+                               TextTrimming="CharacterEllipsis"
+                               MaxWidth="200"
+                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
 
-                        <TextBlock Text="Filter"
-                   VerticalAlignment="Center"
-                   Margin="0,0,8,0"/>
+                    <TextBlock x:Name="LastInputValueText"
+                               Grid.Row="1"
+                               Grid.Column="1"
+                               Text="—"
+                               Foreground="{DynamicResource AppForegroundBrush}"
+                               FontSize="{StaticResource FontSizeMedium}"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Right"
+                               TextAlignment="Right"
+                               TextTrimming="CharacterEllipsis"
+                               MaxWidth="200"
+                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
 
-                        <TextBox Width="260"
-                             Text="{Binding FilterText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             FontFamily="{StaticResource AppFontFamily}"
-                             FontSize="{StaticResource FontSizeSmall}"
-                             VerticalScrollBarVisibility="Disabled"
-                             HorizontalScrollBarVisibility="Disabled"
-                             Margin="0,0,12,0"/>
-
-                        <Button Content="Clear"
-                Width="70"
-                Command="{Binding ClearFilterCommand}"/>
-                    </StackPanel>
-
-                    <StackPanel Grid.Column="2"
-                Orientation="Horizontal"
-                HorizontalAlignment="Right">
-
-                        <Button Content="Import Controls"
-                Width="130"
-                Command="{Binding ImportBindingsCommand}"
-                Margin="0,0,8,0"/>
-
-                        <Button Content="Export Controls"
-                Width="130"
-                Command="{Binding ExportBindingsCommand}"/>
-                    </StackPanel>
                 </Grid>
+            </Border>
+        </Grid>
 
-                <TextBlock Grid.Row="2"
-                   Text="{Binding HelperText}"
-                   Style="{StaticResource MutedTextBlockStyle}"
-                   FontSize="{StaticResource FontSizeSmall}"
-                   TextWrapping="Wrap"/>
-            </Grid>
-        </Border>
-
+        <!-- Filters and Mapping Table -->
         <Grid Grid.Row="1">
+
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="240"/>
                 <ColumnDefinition Width="12"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <Grid Grid.Column="0"
-                  VerticalAlignment="Top">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="12"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
+            <Border Grid.Column="0"
+                    Padding="12,6,12,12"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource AppBorderBrush}"
+                    Background="{DynamicResource AppSurfaceBrush}">
 
-                <Border Grid.Row="0"
-                        Padding="12"
-                        BorderThickness="1"
-                        BorderBrush="{DynamicResource AppBorderBrush}"
-                        Background="{DynamicResource AppSurfaceBrush}">
-                    <StackPanel>
-                        <TextBlock Text="CATEGORIES"
+                <Grid>
+
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0">
+
+                        <TextBlock Text="{Binding ResultsCountText}"
+                                   Style="{StaticResource ControlsSidebarResultHeaderTextBlockStyle}"
+                                   Margin="0,0,0,10"/>
+
+                        <TextBlock Text="FILTER BY TEXT"
                                    Style="{StaticResource ControlsNavHeadingTextBlockStyle}"/>
 
-                        <ListBox x:Name="CategoryListBox"
-                                 ItemsSource="{Binding Categories}"
-                                 SelectedItem="{Binding SelectedCategory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                 Style="{StaticResource ControlsNavListBoxStyle}"
-                                 ItemContainerStyle="{StaticResource ControlsNavListBoxItemStyle}"
-                                 PreviewKeyDown="CategoryListBox_PreviewKeyDown"
-                                 PreviewMouseLeftButtonUp="CategoryListBox_PreviewMouseLeftButtonUp"/>
-                    </StackPanel>
-                </Border>
+                        <Grid Margin="0,0,0,20">
 
-                <Border Grid.Row="2"
-                        Padding="12"
-                        BorderThickness="1"
-                        BorderBrush="{DynamicResource AppBorderBrush}"
-                        Background="{DynamicResource AppSurfaceBrush}">
-                    <StackPanel>
-                        <TextBlock Text="LAST INPUT"
+                            <TextBox x:Name="FilterTextBox"
+                                     Text="{Binding FilterText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     FontFamily="{StaticResource AppFontFamily}"
+                                     FontSize="{StaticResource FontSizeSmall}"
+                                     VerticalScrollBarVisibility="Disabled"
+                                     HorizontalScrollBarVisibility="Disabled"/>
+
+                            <TextBlock Text="Type to filter..."
+                                       Style="{StaticResource ControlsFilterPlaceholderTextBlockStyle}"
+                                       Margin="9,0,0,0"/>
+
+                        </Grid>
+
+                        <TextBlock Text="FILTER BY CATEGORY"
                                    Style="{StaticResource ControlsNavHeadingTextBlockStyle}"/>
 
-                        <TextBlock x:Name="LastInputDeviceText"
-                                   Text="No input detected"
-                                   Style="{StaticResource MutedTextBlockStyle}"
-                                   FontSize="{StaticResource FontSizeSmall}"
-                                   TextWrapping="Wrap"/>
-
-                        <TextBlock x:Name="LastInputValueText"
-                                   Text="—"
-                                   Foreground="{DynamicResource AppForegroundBrush}"
-                                   FontSize="{StaticResource FontSizeMedium}"
-                                   FontWeight="SemiBold"
-                                   Margin="0,4,0,0"
-                                   TextWrapping="Wrap"/>
                     </StackPanel>
-                </Border>
-            </Grid>
+
+                    <ListBox x:Name="CategoryListBox"
+                             Grid.Row="1"
+                             ItemsSource="{Binding Categories}"
+                             SelectedItem="{Binding SelectedCategory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             Style="{StaticResource ControlsNavListBoxStyle}"
+                             ItemContainerStyle="{StaticResource ControlsNavListBoxItemStyle}"
+                             PreviewKeyDown="CategoryListBox_PreviewKeyDown"
+                             PreviewMouseLeftButtonUp="CategoryListBox_PreviewMouseLeftButtonUp"/>
+
+                    <Button Grid.Row="2"
+                            Content="{Binding ClearFilterButtonText}"
+                            Command="{Binding ClearFilterCommand}"
+                            Width="120"
+                            Height="32"
+                            HorizontalAlignment="Center"
+                            Margin="0,12,0,0"/>
+
+                </Grid>
+            </Border>
 
             <DataGrid x:Name="ControlsGrid"
                       Grid.Column="2"
@@ -158,8 +200,9 @@
                       PreviewKeyDown="ControlsGrid_PreviewKeyDown">
 
                 <DataGrid.Columns/>
-                
+
             </DataGrid>
+
         </Grid>
     </Grid>
 </UserControl>
