@@ -51,15 +51,22 @@ public sealed class KeyCatalogService
             return catalogs;
         }
 
-        var keyFiles = Directory
-            .GetFiles(configDir, "BMS - Full*.key", SearchOption.TopDirectoryOnly)
-            .OrderBy(GetSortKey)
-            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
+        // Only load the supported aircraft FULL key files.
+        // Ignore backup copies or other files with similar names.
+        string[] fullKeyFiles =
+        {
+            "BMS - Full.key",
+            "BMS - Full-F15ABCD.key"
+        };
+
+        var keyFiles = fullKeyFiles
+            .Select(fileName => Path.Combine(configDir, fileName))
+            .Where(File.Exists)
             .ToList();
 
         if (keyFiles.Count == 0)
         {
-            DebugDiagnosticsService.Warn($"KEY catalog load found no BMS - Full*.key files in: {configDir}");
+            DebugDiagnosticsService.Warn($"KEY catalog load found no supported FULL key files in: {configDir}");
             return catalogs;
         }
 
@@ -220,10 +227,4 @@ public sealed class KeyCatalogService
         return "F-16";
     }
 
-    private static int GetSortKey(string path)
-    {
-        return string.Equals(GetAircraftProfile(path), "F-16", StringComparison.OrdinalIgnoreCase)
-            ? 0
-            : 1;
-    }
 }
