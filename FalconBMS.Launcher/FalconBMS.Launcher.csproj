@@ -99,6 +99,7 @@
 	  <None Remove="Assets\MC.png" />
 	  <None Remove="Assets\RTTClient64.png" />
 	  <None Remove="Assets\RTTServer64.png" />
+	  <None Remove="Assets\Config.png" />
 	  <None Remove="Assets\trackir.png" />
 	  <None Remove="Assets\UPD.png" />
 	  <None Remove="Assets\WC.png" />
@@ -210,6 +211,9 @@
 	    <CopyToOutputDirectory>Never</CopyToOutputDirectory>
 	  </Resource>
 	  <Resource Include="Assets\trackir.png">
+	    <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+	  </Resource>
+	  <Resource Include="Assets\config-app.png">
 	    <CopyToOutputDirectory>Never</CopyToOutputDirectory>
 	  </Resource>
 	</ItemGroup>
