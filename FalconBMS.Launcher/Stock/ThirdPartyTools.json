@@ -1,9 +1,9 @@
 [
   {
-    "id": "trackir",
-    "displayName": "TrackIR",
-    "executableName": "TrackIR5.exe",
-    "executablePath": ""
+    "id": "config-app",
+    "displayName": "BMS Config",
+    "executableName": "Config.exe",
+    "executablePath": "Config.exe"
   },
   {
     "id": "ivc-client",
@@ -28,5 +28,11 @@
     "displayName": "RTT Server",
     "executableName": "RTTServer64.exe",
     "executablePath": "Tools\\RTTRemote\\RTTServer64.exe"
+  },
+  {
+    "id": "trackir",
+    "displayName": "TrackIR",
+    "executableName": "TrackIR5.exe",
+    "executablePath": ""
   }
 ]
